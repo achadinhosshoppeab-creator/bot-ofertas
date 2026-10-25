@@ -23,11 +23,13 @@ async function main(): Promise<void> {
   const db = openDatabase(resolve(env.DATABASE_PATH));
   const { createSource, linker } = createSourceAndLinker(config);
   const telegram = env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_ADMIN_CHAT_ID ? new TelegramClient(env.TELEGRAM_BOT_TOKEN) : undefined;
+  // "python3" (comando no PATH) fica como está; ".venv/bin/python" vira caminho absoluto.
+  const python = env.TTS_PYTHON.includes("/") ? resolve(env.TTS_PYTHON) : env.TTS_PYTHON;
   const ttsFor = (productId: string): TtsOptions | undefined =>
     env.TTS_ENGINE === "edge"
-      ? { engine: "edge", python: resolve(env.TTS_PYTHON), voice: env.TTS_VOICE === "auto" ? pick(VOICES, productId, "voice") : env.TTS_VOICE, rate: env.TTS_RATE }
+      ? { engine: "edge", python, voice: env.TTS_VOICE === "auto" ? pick(VOICES, productId, "voice") : env.TTS_VOICE, rate: env.TTS_RATE }
       : env.TTS_ENGINE === "kokoro" && env.TTS_MODEL_DIR
-        ? { engine: "kokoro", modelDir: resolve(env.TTS_MODEL_DIR), python: resolve(env.TTS_PYTHON), speakerId: env.TTS_SPEAKER_ID }
+        ? { engine: "kokoro", modelDir: resolve(env.TTS_MODEL_DIR), python, speakerId: env.TTS_SPEAKER_ID }
         : undefined;
 
   try {
