@@ -1,0 +1,73 @@
+name: rascunhos-tiktok
+
+on:
+  schedule:
+    # 07:30 de Brasília (10:30 UTC)
+    - cron: "30 10 * * *"
+  workflow_dispatch:
+    inputs:
+      quantidade:
+        description: "Quantos rascunhos gerar"
+        default: "3"
+
+concurrency:
+  group: rascunhos
+  cancel-in-progress: false
+
+jobs:
+  drafts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: ffmpeg + edge-tts
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg > /dev/null
+          pip install -q edge-tts
+
+      # Banco próprio deste job (tabela drafts evita repetir produto).
+      - name: Restaurar banco dos rascunhos
+        uses: actions/cache/restore@v4
+        with:
+          path: data/bot.db
+          key: drafts-db-${{ github.run_id }}
+          restore-keys: drafts-db-
+
+      - name: Gerar e enviar
+        env:
+          OFFER_SOURCE: shopee
+          DRY_RUN: "true"
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_ADMIN_CHAT_ID: ${{ secrets.TELEGRAM_ADMIN_CHAT_ID }}
+          SHOPEE_APP_ID: ${{ secrets.SHOPEE_APP_ID }}
+          SHOPEE_SECRET: ${{ secrets.SHOPEE_SECRET }}
+          BRAND_NAME: Achadinhos
+          DRAFTS_PER_RUN: ${{ github.event.inputs.quantidade || '3' }}
+          TTS_ENGINE: edge
+          TTS_PYTHON: python3
+          TTS_VOICE: auto
+        run: npx tsx src/draft.ts
+
+      - name: Salvar banco dos rascunhos
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: data/bot.db
+          key: drafts-db-${{ github.run_id }}
+
+      - name: Guardar vídeos como artefato (7 dias)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rascunhos-${{ github.run_id }}
+          path: data/drafts/estoque
+          retention-days: 7
+          if-no-files-found: ignore

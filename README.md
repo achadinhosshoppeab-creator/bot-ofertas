@@ -46,6 +46,16 @@ npm run dry-run        # mostra as ofertas que seriam publicadas
 | `npm run typecheck` / `npm run lint` | Checagens |
 | `npm run build` | Compila para `dist/` |
 
+
+## Rodando na nuvem (GitHub Actions)
+
+O repositório privado `achadinhosshoppeab-creator/bot-ofertas` tem dois workflows:
+
+- `bot.yml`: a cada 10 min (8h–23h BRT) roda `npm run ci`: coleta → site → relatório → posts no canal espalhados por 8 min (intervalo sorteado) → poda do histórico. O banco SQLite vive no cache do Actions (`bot-db-*`); `data/seed/state.json` (publicados + vistos) é commitado a cada rodada e semeia o banco se o cache sumir.
+- `drafts.yml`: 07:30 BRT gera `DRAFTS_PER_RUN` vídeos (ffmpeg + edge-tts) e manda no Telegram do admin; também ficam como artefato por 7 dias.
+
+Segredos: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHANNEL_ID`, `TELEGRAM_ADMIN_CHAT_ID`, `SHOPEE_APP_ID`, `SHOPEE_SECRET`, `SITE_DEPLOY_KEY` (chave SSH com escrita no repo do site). Não rode o bot local (`npm start`) junto com o Actions, senão o canal recebe posts em dobro.
+
 ## O que você precisa configurar fora do código
 
 1. Criar bot no BotFather → `TELEGRAM_BOT_TOKEN`
