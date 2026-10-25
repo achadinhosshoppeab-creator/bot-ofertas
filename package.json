@@ -1,0 +1,44 @@
+{
+  "name": "bot-ofertas",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Bot de ofertas de games e hardware (Telegram + afiliado Mercado Livre)",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "start": "tsx src/index.ts",
+    "start:mac": "caffeinate -s -i tsx src/index.ts",
+    "ci": "tsx src/ci.ts",
+    "dry-run": "DRY_RUN=true tsx src/run.ts",
+    "draft": "tsx src/draft.ts",
+    "tiktok:login": "tsx src/tiktok-login.ts",
+    "tiktok:test": "tsx src/tiktok-test.ts",
+    "tiktok:post": "tsx src/tiktok-post.ts",
+    "logo": "tsx src/logo.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "cartoon": "tsx src/cartoon-video.ts"
+  },
+  "dependencies": {
+    "better-sqlite3": "^13.0.3",
+    "dotenv": "^16.5.0",
+    "node-cron": "^4.6.0",
+    "sharp": "^0.35.5",
+    "zod": "^3.25.28"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.27.0",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^22.15.21",
+    "eslint": "^9.27.0",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.32.1",
+    "vitest": "^3.1.4"
+  }
+}

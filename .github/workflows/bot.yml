@@ -1,0 +1,81 @@
+name: bot-ofertas
+
+on:
+  schedule:
+    # A cada 10 min, 8h–23h de Brasília (UTC-3 → 11–23 e 0–2 UTC).
+    - cron: "*/10 11-23 * * *"
+    - cron: "*/10 0-2 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: bot-ofertas
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      # Banco SQLite persiste entre rodadas pelo cache (chave nova a cada rodada, restaura a mais recente).
+      - name: Restaurar banco
+        uses: actions/cache/restore@v4
+        with:
+          path: data/bot.db
+          key: bot-db-${{ github.run_id }}
+          restore-keys: bot-db-
+
+      - name: Clonar site
+        uses: actions/checkout@v4
+        with:
+          repository: achadinhosshoppeab-creator/achadinhosshoppeab-creator.github.io
+          path: site
+          ssh-key: ${{ secrets.SITE_DEPLOY_KEY }}
+
+      - name: Rodar
+        env:
+          OFFER_SOURCE: shopee
+          DRY_RUN: "false"
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHANNEL_ID: ${{ secrets.TELEGRAM_CHANNEL_ID }}
+          TELEGRAM_ADMIN_CHAT_ID: ${{ secrets.TELEGRAM_ADMIN_CHAT_ID }}
+          SHOPEE_APP_ID: ${{ secrets.SHOPEE_APP_ID }}
+          SHOPEE_SECRET: ${{ secrets.SHOPEE_SECRET }}
+          BRAND_NAME: Achadinhos
+          SITE_DIR: site
+          SITE_URL: https://achadinhosshoppeab-creator.github.io
+          SITE_MAX_OFFERS: "300"
+          SITE_PUSH: "true"
+          PUBLISH_WINDOW_MINUTES: "8"
+          TTS_ENGINE: "off"
+        run: |
+          git -C site config user.name "Achadinhos"
+          git -C site config user.email "347618407+achadinhosshoppeab-creator@users.noreply.github.com"
+          npx tsx src/ci.ts
+
+      - name: Salvar banco
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: data/bot.db
+          key: bot-db-${{ github.run_id }}
+
+      - name: Guardar seed do estado
+        if: always()
+        run: |
+          git config user.name "Achadinhos"
+          git config user.email "347618407+achadinhosshoppeab-creator@users.noreply.github.com"
+          git add data/seed/state.json
+          git diff --cached --quiet || git commit -q -m "Atualiza estado [skip ci]"
+          git push -q || true
