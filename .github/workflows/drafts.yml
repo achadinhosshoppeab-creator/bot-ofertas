@@ -47,6 +47,7 @@ jobs:
           DRY_RUN: "true"
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_ADMIN_CHAT_ID: ${{ secrets.TELEGRAM_ADMIN_CHAT_ID }}
+          TELEGRAM_CHANNEL_ID: ${{ secrets.TELEGRAM_CHANNEL_ID }}
           SHOPEE_APP_ID: ${{ secrets.SHOPEE_APP_ID }}
           SHOPEE_SECRET: ${{ secrets.SHOPEE_SECRET }}
           BRAND_NAME: Achadinhos
