@@ -240,6 +240,7 @@ export function createApp(config: AppConfig) {
             maxOffers: env.SITE_MAX_OFFERS,
             push: env.SITE_PUSH,
             categories: filtros.categories,
+            ...(env.SITE_URL ? { siteUrl: env.SITE_URL } : {}),
           });
           site = outcome.changed ? `atualizado (${outcome.count})` : `sem mudanças (${outcome.count})`;
         } catch (error) {

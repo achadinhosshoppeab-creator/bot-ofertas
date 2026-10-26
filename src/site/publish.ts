@@ -102,6 +102,8 @@ export async function publishSite(
     maxOffers: number;
     push: boolean;
     categories?: CategoryMap;
+    /** URL pública do site; quando informada, avisa os buscadores (IndexNow) a cada atualização. */
+    siteUrl?: string;
     log?: (message: string) => void;
   },
 ): Promise<{ count: number; changed: boolean }> {
@@ -149,5 +151,22 @@ export async function publishSite(
   await git("commit", "-q", "-m", `Atualiza ofertas (${data.offers.length})`);
   await git("push", "-q");
   log(`[site] publicado: ${data.offers.length} ofertas.`);
+  await pingIndexNow(options.siteUrl, log);
   return { count: data.offers.length, changed: true };
+}
+
+/** Chave do IndexNow; o arquivo <chave>.txt com esse conteúdo fica na raiz do site. */
+export const INDEXNOW_KEY = "f08bd053dd9d80933d06489432129ea0";
+
+/** Avisa Bing/Yandex/Seznam/Naver que a página mudou (Google não participa). Falha nunca derruba a rodada. */
+export async function pingIndexNow(siteUrl: string | undefined, log: (message: string) => void): Promise<void> {
+  if (!siteUrl) return;
+  const base = siteUrl.replace(/\/$/, "");
+  const url = `https://api.indexnow.org/indexnow?url=${encodeURIComponent(`${base}/`)}&key=${INDEXNOW_KEY}`;
+  try {
+    const response = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+    log(`[site] IndexNow: HTTP ${response.status}`);
+  } catch (error) {
+    log(`[site] IndexNow falhou: ${String(error)}`);
+  }
 }

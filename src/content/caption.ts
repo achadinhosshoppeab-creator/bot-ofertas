@@ -11,6 +11,8 @@ export type CaptionInput = {
   brand: string;
   /** Hashtags extras por nicho (sem #). */
   tags?: string[];
+  /** Username do canal do Telegram (sem @) para citar na legenda. */
+  telegram?: string;
 };
 
 const OPENERS = [
@@ -59,6 +61,7 @@ export function socialCaption(input: CaptionInput): string {
     `${opener} ${shortTitle(offer.title, 70)}`,
     `De R$ ${brl.format(input.referencePrice)} por ${price} (${Math.round(input.discountPercent)}% off)`,
     cta,
+    ...(input.telegram ? [`📲 Todas as ofertas do dia no Telegram: t.me/${input.telegram}`] : []),
     "",
     hashtags(input).join(" "),
   ].join("\n");

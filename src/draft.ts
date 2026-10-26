@@ -44,7 +44,7 @@ async function main(): Promise<void> {
     // Estoque: ainda não postado. `npm run tiktok:post` move para data/drafts/publicados/<data>/.
     for (const candidate of chosen) {
       const dir = resolve("data", "drafts", "estoque", candidate.offer.productId);
-      await draft(candidate, dir, env.BRAND_NAME, telegram, env.TELEGRAM_ADMIN_CHAT_ID, ttsFor(candidate.offer.productId));
+      await draft(candidate, dir, env.BRAND_NAME, env.TELEGRAM_CHANNEL_ID, telegram, env.TELEGRAM_ADMIN_CHAT_ID, ttsFor(candidate.offer.productId));
       insertDraft(db, { productId: candidate.offer.productId, source: candidate.offer.source, price: candidate.offer.price });
       console.log(`[draft] ${candidate.offer.title.slice(0, 60)} → ${dir}`);
     }
@@ -60,6 +60,7 @@ async function draft(
   candidate: Candidate,
   dir: string,
   brand: string,
+  channelId: string,
   telegram: TelegramClient | undefined,
   adminChatId: string,
   tts: TtsOptions | undefined,
@@ -69,6 +70,7 @@ async function draft(
     referencePrice: candidate.evaluation.referencePrice,
     discountPercent: candidate.evaluation.discountPercent,
     brand,
+    ...(channelId.startsWith("@") ? { telegram: channelId.slice(1) } : {}),
   };
   const slides = await buildCarousel(input);
   const caption = socialCaption(input);
