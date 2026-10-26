@@ -49,9 +49,9 @@ npm run dry-run        # mostra as ofertas que seriam publicadas
 
 ## Rodando na nuvem (GitHub Actions)
 
-O repositório privado `achadinhosshoppeab-creator/bot-ofertas` tem dois workflows:
+O repositório público `achadinhosshoppeab-creator/bot-ofertas` (público para ter minutos ilimitados de Actions; segredos só na aba Secrets) tem dois workflows:
 
-- `bot.yml`: a cada 10 min (8h–23h BRT) roda `npm run ci`: coleta → site → relatório → posts no canal espalhados por 8 min (intervalo sorteado) → poda do histórico. O banco SQLite vive no cache do Actions (`bot-db-*`); `data/seed/state.json` (publicados + vistos) é commitado a cada rodada e semeia o banco se o cache sumir.
+- `bot.yml`: roda 24h `npm run ci`: coleta → site → relatório → posts no canal (intervalo sorteado) → poda do histórico. Dia (8h–23h BRT): rodada a cada 10 min, janela de 20 min, posts a cada 1–5 min. Madrugada: rodada a cada 30 min, janela de 30 min, posts a cada 10–20 min (`PUBLISH_INTERVAL_MIN/MAX`). A janela é maior que o cron, então as rodadas se encadeiam sem buraco. O banco SQLite vive no cache do Actions (`bot-db-*`); `data/seed/state.json` (publicados + vistos) é commitado a cada rodada e semeia o banco se o cache sumir.
 - `drafts.yml`: 07:30 BRT gera `DRAFTS_PER_RUN` vídeos (ffmpeg + edge-tts) e manda no Telegram do admin; também ficam como artefato por 7 dias.
 
 Segredos: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHANNEL_ID`, `TELEGRAM_ADMIN_CHAT_ID`, `SHOPEE_APP_ID`, `SHOPEE_SECRET`, `SITE_DEPLOY_KEY` (chave SSH com escrita no repo do site). Não rode o bot local (`npm start`) junto com o Actions, senão o canal recebe posts em dobro.

@@ -94,7 +94,7 @@
   "requireOfficialOrHighReputation": true,
   "republishCooldownDays": 7,
   "republishExtraDropPercent": 5,
-  "maxPostsPerDay": 200,
+  "maxPostsPerDay": 400,
   "minIntervalMinutesBetweenPosts": 1,
   "maxStoreDiscountPercent": 80,
   "categories": {

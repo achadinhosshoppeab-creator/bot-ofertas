@@ -18,6 +18,13 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 async function main(): Promise<void> {
   const config = loadConfig();
   assertLiveReady(config);
+  // Intervalo entre posts pode vir do ambiente (o workflow usa valores maiores de madrugada).
+  const minInterval = Number(process.env.PUBLISH_INTERVAL_MIN ?? "");
+  const maxInterval = Number(process.env.PUBLISH_INTERVAL_MAX ?? "");
+  if (minInterval > 0 && maxInterval >= minInterval) {
+    config.filtros.minIntervalMinutesBetweenPosts = minInterval;
+    config.filtros.maxIntervalMinutesBetweenPosts = maxInterval;
+  }
 
   // Semeia estado (publicados/vistos) quando o banco nasce vazio (cache perdido ou primeira rodada).
   const db = openDatabase(resolve(config.env.DATABASE_PATH));

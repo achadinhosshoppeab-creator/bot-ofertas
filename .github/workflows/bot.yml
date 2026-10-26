@@ -2,9 +2,11 @@ name: bot-ofertas
 
 on:
   schedule:
-    # A cada 10 min, 8h–23h de Brasília (UTC-3 → 11–23 e 0–2 UTC).
+    # Dia (8h–22h59 de Brasília = 11–23 e 0–1 UTC): a cada 10 min.
     - cron: "*/10 11-23 * * *"
-    - cron: "*/10 0-2 * * *"
+    - cron: "*/10 0-1 * * *"
+    # Madrugada (23h–7h59 de Brasília = 2–10 UTC): a cada 30 min, posts mais espaçados.
+    - cron: "*/30 2-10 * * *"
   workflow_dispatch:
 
 concurrency:
@@ -17,7 +19,7 @@ permissions:
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
 
@@ -28,7 +30,7 @@ jobs:
 
       - run: npm ci
 
-      # Janela de publicação (20 min) maior que o intervalo do cron (10 min): a rodada seguinte fica
+      # Janela de publicação igual ou maior que o intervalo do cron: a rodada seguinte fica
       # na fila do grupo de concorrência e começa assim que esta termina, sem buraco no canal.
       # Banco SQLite persiste entre rodadas pelo cache (chave nova a cada rodada, restaura a mais recente).
       - name: Restaurar banco
@@ -45,6 +47,23 @@ jobs:
           path: site
           ssh-key: ${{ secrets.SITE_DEPLOY_KEY }}
 
+      # Ritmo conforme a hora de Brasília: dia = janela 20 min, posts a cada 1–5 min;
+      # madrugada (23h–8h) = janela 30 min, posts a cada 10–20 min.
+      - name: Definir ritmo
+        run: |
+          hora=$(TZ=America/Sao_Paulo date +%H)
+          if [ "$hora" -ge 23 ] || [ "$hora" -lt 8 ]; then
+            echo "PUBLISH_WINDOW_MINUTES=30" >> "$GITHUB_ENV"
+            echo "PUBLISH_INTERVAL_MIN=10" >> "$GITHUB_ENV"
+            echo "PUBLISH_INTERVAL_MAX=20" >> "$GITHUB_ENV"
+            echo "ritmo: madrugada"
+          else
+            echo "PUBLISH_WINDOW_MINUTES=20" >> "$GITHUB_ENV"
+            echo "PUBLISH_INTERVAL_MIN=1" >> "$GITHUB_ENV"
+            echo "PUBLISH_INTERVAL_MAX=5" >> "$GITHUB_ENV"
+            echo "ritmo: dia"
+          fi
+
       - name: Rodar
         env:
           OFFER_SOURCE: shopee
@@ -59,7 +78,6 @@ jobs:
           SITE_URL: https://achadinhosshoppeab-creator.github.io
           SITE_MAX_OFFERS: "300"
           SITE_PUSH: "true"
-          PUBLISH_WINDOW_MINUTES: "20"
           TTS_ENGINE: "off"
         run: |
           git -C site config user.name "Achadinhos"
