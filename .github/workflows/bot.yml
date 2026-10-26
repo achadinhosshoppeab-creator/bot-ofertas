@@ -17,7 +17,7 @@ permissions:
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
 
@@ -28,6 +28,8 @@ jobs:
 
       - run: npm ci
 
+      # Janela de publicação (20 min) maior que o intervalo do cron (10 min): a rodada seguinte fica
+      # na fila do grupo de concorrência e começa assim que esta termina, sem buraco no canal.
       # Banco SQLite persiste entre rodadas pelo cache (chave nova a cada rodada, restaura a mais recente).
       - name: Restaurar banco
         uses: actions/cache/restore@v4
@@ -57,7 +59,7 @@ jobs:
           SITE_URL: https://achadinhosshoppeab-creator.github.io
           SITE_MAX_OFFERS: "300"
           SITE_PUSH: "true"
-          PUBLISH_WINDOW_MINUTES: "8"
+          PUBLISH_WINDOW_MINUTES: "20"
           TTS_ENGINE: "off"
         run: |
           git -C site config user.name "Achadinhos"

@@ -198,7 +198,8 @@ export function createApp(config: AppConfig) {
   /** Fila de candidatos da última coleta; o publishTick consome daqui. */
   let pool: Candidate[] = [];
   let intervalMinutes = nextIntervalMinutes(filtros);
-  let postedSinceReport = 0;
+  /** Posts já feitos no canal hoje (lido do banco: sobrevive a reinícios do processo). */
+  const postsToday = (now: Date) => countPublishedSince(db, startOfDayBrt(now));
 
   /** Resumo de cada rodada para o admin (sempre, mesmo com 0 novas). */
   async function report(text: string): Promise<void> {
@@ -254,10 +255,9 @@ export function createApp(config: AppConfig) {
           `site: ${site}`,
           env.DRY_RUN
             ? "canal: desligado (DRY_RUN)"
-            : `canal: ${postedSinceReport} post${postedSinceReport === 1 ? "" : "s"} desde o último relatório · ${pool.length} na fila`,
+            : `canal: ${postsToday(new Date())} post${postsToday(new Date()) === 1 ? "" : "s"} hoje · ${pool.length} na fila`,
         ].join("\n"),
       );
-      postedSinceReport = 0;
       return result;
     } catch (error) {
       await alerter.alert(`Execução falhou: ${error instanceof Error ? error.stack ?? error.message : String(error)}`);
@@ -288,7 +288,6 @@ export function createApp(config: AppConfig) {
     const [candidate] = pool.splice(index, 1) as [Candidate];
     try {
       const messageId = await publishCandidate({ db, linker, publisher }, candidate);
-      postedSinceReport += 1;
       intervalMinutes = nextIntervalMinutes(filtros);
       console.log(`[canal] publicado: ${candidate.offer.title.slice(0, 60)} (msg ${messageId}); próximo em ~${intervalMinutes} min`);
     } catch (error) {
