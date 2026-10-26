@@ -1,6 +1,8 @@
 export type PublishInput = {
   text: string;
   imageUrl?: string;
+  /** Link da oferta, para botão clicável quando a plataforma suportar. */
+  link?: string;
 };
 
 export interface Publisher {

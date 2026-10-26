@@ -28,12 +28,13 @@ export class TelegramClient {
     return data.result.message_id;
   }
 
-  sendMessage(chatId: string, text: string): Promise<number> {
+  sendMessage(chatId: string, text: string, replyMarkup?: ReplyMarkup): Promise<number> {
     return this.call("sendMessage", {
       chat_id: chatId,
       text,
       parse_mode: "HTML",
       link_preview_options: { is_disabled: true },
+      ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
     });
   }
 
@@ -80,10 +81,19 @@ export class TelegramClient {
     return data.result[0].message_id;
   }
 
-  sendPhoto(chatId: string, photo: string, caption: string): Promise<number> {
-    return this.call("sendPhoto", { chat_id: chatId, photo, caption, parse_mode: "HTML" });
+  sendPhoto(chatId: string, photo: string, caption: string, replyMarkup?: ReplyMarkup): Promise<number> {
+    return this.call("sendPhoto", {
+      chat_id: chatId,
+      photo,
+      caption,
+      parse_mode: "HTML",
+      ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
+    });
   }
 }
+
+type InlineButton = { text: string; url: string };
+export type ReplyMarkup = { inline_keyboard: InlineButton[][] };
 
 export class TelegramPublisher implements Publisher {
   readonly name = "telegram";
@@ -94,15 +104,30 @@ export class TelegramPublisher implements Publisher {
   ) {}
 
   async publish(input: PublishInput): Promise<string> {
+    const markup = this.buttons(input);
     if (input.imageUrl) {
       try {
-        return String(await this.client.sendPhoto(this.channelId, input.imageUrl, input.text));
+        return String(await this.client.sendPhoto(this.channelId, input.imageUrl, input.text, markup));
       } catch (error) {
         // Imagem inválida/inacessível não deve impedir o post.
         console.warn(`[telegram] sendPhoto falhou, enviando só texto: ${String(error)}`);
       }
     }
-    return String(await this.client.sendMessage(this.channelId, input.text));
+    return String(await this.client.sendMessage(this.channelId, input.text, markup));
+  }
+
+  /** Botões: abrir a oferta e indicar o canal (só para canais públicos, com @username). */
+  private buttons(input: PublishInput): ReplyMarkup | undefined {
+    const row: InlineButton[] = [];
+    if (input.link) {
+      row.push({ text: "🛒 Ver oferta", url: input.link });
+    }
+    if (this.channelId.startsWith("@")) {
+      const channelUrl = `https://t.me/${this.channelId.slice(1)}`;
+      const share = `https://t.me/share/url?url=${encodeURIComponent(channelUrl)}&text=${encodeURIComponent("Canal com as melhores promoções da Shopee todo dia 🔥")}`;
+      row.push({ text: "📣 Indicar canal", url: share });
+    }
+    return row.length > 0 ? { inline_keyboard: [row] } : undefined;
   }
 }
 

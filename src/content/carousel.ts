@@ -13,6 +13,8 @@ export type CarouselInput = {
   referencePrice: number;
   discountPercent: number;
   brand: string;
+  /** Username do canal do Telegram (sem @), mostrado no slide para a pessoa digitar. */
+  telegram?: string;
 };
 
 export type ImageFetcher = (url: string) => Promise<Buffer>;
@@ -81,7 +83,8 @@ export async function productSlide(input: CarouselInput, image: Buffer): Promise
     ${svgText([`De R$ ${brl.format(input.referencePrice)}`], { y: 1450, size: 48, fill: "#777777" })}
     <line x1="340" y1="1436" x2="740" y2="1436" stroke="#777777" stroke-width="5"/>
     ${svgText([`${input.offer.hasVariantPrices ? "a partir de " : "por "}R$ ${brl.format(input.offer.price)}`], { y: 1580, size: 96, weight: 800, fill: "#ee4d2d" })}
-    ${svgText(["Comenta EU QUERO 💬"], { y: 1760, size: 52, weight: 700, fill: "#222222" })}
+    ${svgText(["Comenta EU QUERO 💬"], { y: 1740, size: 52, weight: 700, fill: "#222222" })}
+    ${input.telegram ? svgText([`📲 t.me/${input.telegram}`], { y: 1830, size: 44, weight: 700, fill: "#ee4d2d" }) : ""}
   `);
 
   const badgeSize = 250;
@@ -107,7 +110,7 @@ export async function ctaSlide(input: CarouselInput): Promise<Buffer> {
     `
     ${svgText([input.brand.toUpperCase()], { y: 560, size: 56, weight: 800, fill: "#ee4d2d" })}
     ${svgText(wrapLines("Todas as ofertas do dia estão no nosso canal", 22, 3), { y: 760, size: 72, weight: 700, fill: "#222222" })}
-    ${svgText(["É só clicar no link da bio 👆"], { y: 1080, size: 54, fill: "#444444" })}
+    ${svgText([input.telegram ? `📲 t.me/${input.telegram}` : "É só clicar no link da bio 👆"], { y: 1080, size: input.telegram ? 64 : 54, weight: input.telegram ? 800 : 400, fill: input.telegram ? "#ee4d2d" : "#444444" })}
   `,
     "#ffffff",
   );

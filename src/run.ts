@@ -160,6 +160,7 @@ export async function publishCandidate(
   const link = await deps.linker.buildLink(candidate.offer);
   const messageId = await deps.publisher.publish({
     text: formatMessage(messageInput(candidate, link)),
+    link,
     ...(candidate.offer.imageUrl ? { imageUrl: candidate.offer.imageUrl } : {}),
   });
   upsertPublished(deps.db, {
