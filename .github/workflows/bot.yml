@@ -1,6 +1,8 @@
 name: bot-ofertas
 
 on:
+  # O cron do GitHub atrasa e pula disparos; por isso cada rodada bem-sucedida dispara a próxima
+  # (passo final). O cron fica como rede de segurança para religar a corrente se uma rodada falhar.
   schedule:
     # Dia (8h–22h59 de Brasília = 11–23 e 0–1 UTC): a cada 10 min.
     - cron: "*/10 11-23 * * *"
@@ -15,6 +17,7 @@ concurrency:
 
 permissions:
   contents: write
+  actions: write
 
 jobs:
   run:
@@ -99,3 +102,9 @@ jobs:
           git add data/seed/state.json
           git diff --cached --quiet || git commit -q -m "Atualiza estado [skip ci]"
           git push -q || true
+
+      - name: Encadear próxima rodada
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run bot.yml --ref main
