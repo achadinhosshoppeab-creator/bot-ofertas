@@ -204,12 +204,13 @@ export function createApp(config: AppConfig) {
     telegram && env.TELEGRAM_CHANNEL_ID ? new TelegramPublisher(telegram, env.TELEGRAM_CHANNEL_ID) : undefined;
 
   let running = false;
-  /** Fila de candidatos da última coleta; o publishTick consome daqui. */
-  let pool: Candidate[] = [];
+  /** Fila de candidatos da última coleta; o publishTick consome daqui. `forced` = repetição por falta de ofertas novas. */
+  let pool: Array<Candidate & { forced?: boolean }> = [];
   let intervalMinutes = nextIntervalMinutes(filtros);
   /** Fila curta: espaça os posts para a fila durar até o cooldown liberar ofertas de novo. */
   const SCARCE_POOL = 60;
-  const pace = () => (pool.length < SCARCE_POOL ? { ...filtros, minIntervalMinutesBetweenPosts: 10, maxIntervalMinutesBetweenPosts: 20 } : filtros);
+  const pace = () =>
+    pool.length < SCARCE_POOL || pool[0]?.forced ? { ...filtros, minIntervalMinutesBetweenPosts: 10, maxIntervalMinutesBetweenPosts: 20 } : filtros;
   /** Posts já feitos no canal hoje (lido do banco: sobrevive a reinícios do processo). */
   const postsToday = (now: Date) => countPublishedSince(db, startOfDayBrt(now));
 
@@ -245,6 +246,13 @@ export function createApp(config: AppConfig) {
         publishEnabled: false,
       });
       pool = result.candidates;
+      if (pool.length === 0 && result.approved.length > 0) {
+        // Fila zerada: o canal não pode ficar mudo. Repete as aprovadas menos recentemente postadas,
+        // em ritmo lento (modo economia), até o cooldown liberar ofertas de novo.
+        const lastPost = (c: Candidate) => getPublished(db, { productId: c.offer.productId, source: c.offer.source })?.publishedAt ?? "";
+        pool = [...result.approved].sort((a, b) => lastPost(a).localeCompare(lastPost(b))).map((c) => ({ ...c, forced: true }));
+        console.log(`[canal] fila vazia: repetindo ${pool.length} aprovadas mais antigas.`);
+      }
       intervalMinutes = nextIntervalMinutes(pace());
       let site = "desligado";
       if (env.SITE_DIR) {
@@ -269,7 +277,7 @@ export function createApp(config: AppConfig) {
           `site: ${site}`,
           env.DRY_RUN
             ? "canal: desligado (DRY_RUN)"
-            : `canal: ${postsToday(new Date())} post${postsToday(new Date()) === 1 ? "" : "s"} hoje · ${pool.length} na fila`,
+            : `canal: ${postsToday(new Date())} post${postsToday(new Date()) === 1 ? "" : "s"} hoje · ${pool.length} na fila${pool[0]?.forced ? " (repetindo, sem novas)" : pool.length < SCARCE_POOL ? " (fila curta, ritmo lento)" : ""}`,
         ].join("\n"),
       );
       return result;
@@ -294,7 +302,7 @@ export function createApp(config: AppConfig) {
     if (!canPostNow(state, { ...filtros, minIntervalMinutesBetweenPosts: intervalMinutes }, now)) {
       return;
     }
-    const index = pool.findIndex((c) => canRepublish(c.offer.price, getPublished(db, { productId: c.offer.productId, source: c.offer.source }), filtros, now));
+    const index = pool.findIndex((c) => c.forced || canRepublish(c.offer.price, getPublished(db, { productId: c.offer.productId, source: c.offer.source }), filtros, now));
     if (index < 0) {
       pool = [];
       return;
