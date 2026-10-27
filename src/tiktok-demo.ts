@@ -5,12 +5,63 @@
  *
  *   npm run tiktok:demo
  */
-import { existsSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { spawn, type ChildProcess } from "node:child_process";
+import { existsSync, mkdirSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { createServer } from "node:http";
 import { resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { stdin, stdout } from "node:process";
 import { loadConfig } from "./config.js";
 import { TikTokAuth, TikTokPublisher, type PrivacyLevel } from "./publishers/tiktok/index.js";
+
+/**
+ * Modo automático (`npm run tiktok:demo -- --auto`): grava a tela sozinho (screencapture do macOS),
+ * abre o navegador no login, recebe a autorização pelo callback.html → localhost:8585, responde
+ * tudo com os padrões, publica, abre o perfil e para a gravação. Só o clique em "Autorizar" é humano.
+ */
+const AUTO = process.argv.includes("--auto");
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+let recorder: ChildProcess | undefined;
+let recordingPath = "";
+
+function startRecording(): void {
+  if (process.platform !== "darwin") return;
+  mkdirSync(resolve("data", "demo"), { recursive: true });
+  recordingPath = resolve("data", "demo", `tiktok-demo-${new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-")}.mov`);
+  // -V: duração máxima em segundos; o processo é encerrado antes com SIGINT, que finaliza o arquivo.
+  recorder = spawn("screencapture", ["-V", "600", "-x", recordingPath], { stdio: "ignore" });
+  console.log(`🎥 Gravando a tela em ${recordingPath}`);
+}
+
+async function stopRecording(): Promise<void> {
+  if (!recorder) return;
+  recorder.kill("SIGINT");
+  await new Promise<void>((done) => {
+    recorder?.once("exit", () => done());
+    setTimeout(done, 8000);
+  });
+  console.log(`🎥 Gravação salva: ${recordingPath}`);
+}
+
+/** Espera o callback.html do site entregar a URL de retorno em http://localhost:8585/callback. */
+function waitCallback(timeoutMs: number): Promise<URL> {
+  return new Promise((done, fail) => {
+    const server = createServer((req, res) => {
+      res.setHeader("access-control-allow-origin", "*");
+      res.end("ok");
+      const incoming = new URL(req.url ?? "/", "http://localhost:8585");
+      if (incoming.pathname === "/callback" && incoming.searchParams.get("code")) {
+        server.close();
+        done(incoming);
+      }
+    });
+    server.listen(8585);
+    setTimeout(() => {
+      server.close();
+      fail(new Error("Tempo esgotado esperando a autorização no navegador."));
+    }, timeoutMs);
+  });
+}
 
 const PRIVACY_LABEL: Record<string, string> = {
   PUBLIC_TO_EVERYONE: "Público (todos)",
@@ -21,6 +72,11 @@ const PRIVACY_LABEL: Record<string, string> = {
 
 const rl = createInterface({ input: stdin, output: stdout });
 const ask = async (question: string, fallback: string): Promise<string> => {
+  if (AUTO) {
+    console.log(`${question} [${fallback}] → ${fallback}`);
+    await sleep(1200);
+    return fallback;
+  }
   const answer = (await rl.question(`${question} [${fallback}] `)).trim();
   return answer === "" ? fallback : answer;
 };
@@ -39,9 +95,11 @@ const auth = new TikTokAuth({
 });
 const publisher = new TikTokPublisher(auth);
 
-// 1) Login com TikTok (OAuth com PKCE), só se ainda não houver token salvo.
+if (AUTO) startRecording();
+
+// 1) Login com TikTok (OAuth com PKCE), só se ainda não houver token salvo. No modo automático o login é sempre refeito (a revisão precisa ver a tela de autorização).
 title("1. Entrar com o TikTok");
-if (existsSync(resolve(env.TIKTOK_TOKENS_PATH)) && (await yes("Já existe um login salvo. Usar esse login?", true))) {
+if (!AUTO && existsSync(resolve(env.TIKTOK_TOKENS_PATH)) && (await yes("Já existe um login salvo. Usar esse login?", true))) {
   console.log("Usando o login salvo.");
 } else {
   if (existsSync(resolve(env.TIKTOK_TOKENS_PATH))) unlinkSync(resolve(env.TIKTOK_TOKENS_PATH));
@@ -49,8 +107,15 @@ if (existsSync(resolve(env.TIKTOK_TOKENS_PATH)) && (await yes("Já existe um log
   const pendingPath = resolve(env.TIKTOK_TOKENS_PATH).replace(/\.json$/, "-pending.json");
   writeFileSync(pendingPath, JSON.stringify({ codeVerifier, state, createdAt: new Date().toISOString() }), { mode: 0o600 });
   console.log("\nAbra esta URL no navegador e autorize o app Achadinhos:\n\n" + url + "\n");
-  const pasted = await ask("Cole aqui a URL completa para onde o TikTok redirecionou", "");
-  const callback = new URL(pasted);
+  let callback: URL;
+  if (AUTO) {
+    const waiting = waitCallback(4 * 60_000);
+    spawn("open", [url], { stdio: "ignore" });
+    console.log("Aguardando você clicar em Autorizar no navegador...");
+    callback = await waiting;
+  } else {
+    callback = new URL(await ask("Cole aqui a URL completa para onde o TikTok redirecionou", ""));
+  }
   const code = callback.searchParams.get("code");
   if (!code || callback.searchParams.get("state") !== state) throw new Error("Callback inválido (code ausente ou state diferente).");
   await auth.exchangeCode(code, codeVerifier);
@@ -133,4 +198,12 @@ const publishId = await publisher.publishVideo(video, caption, privacy, {
 });
 console.log(`\nPublicado. publish_id: ${publishId}`);
 console.log("O vídeo pode levar alguns minutos para aparecer no perfil do TikTok.");
+if (AUTO && info.creator_username) {
+  console.log("Abrindo o perfil para mostrar o vídeo publicado...");
+  spawn("open", [`https://www.tiktok.com/@${info.creator_username}`], { stdio: "ignore" });
+  await sleep(25_000);
+  await stopRecording();
+  console.log("\nPronto. Suba o arquivo .mov acima como demo video no portal do TikTok e envie para revisão.");
+}
 rl.close();
+process.exit(0);

@@ -76,10 +76,10 @@ Segredos: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHANNEL_ID`, `TELEGRAM_ADMIN_CHAT_ID`,
 
 ## Revisão do TikTok (para postar público pela API)
 
-1. No Mac, abra a gravação de tela (Cmd+Shift+5 → "Gravar a tela inteira") e comece a gravar.
-2. Rode `npm run tiktok:demo` e siga os passos: abra a URL de login no navegador (logado na conta da marca), autorize, cole a URL de retorno, escolha o vídeo, a privacidade, as interações e confirme. Deixe o terminal e o navegador visíveis.
-3. Abra o perfil no TikTok e mostre o vídeo publicado. Pare a gravação (1 a 3 minutos no total).
-4. No portal de desenvolvedor do TikTok, no app de produção: suba o vídeo como "demo video", confira os escopos `user.info.basic` e `video.publish`, e envie para revisão.
+1. Com o navegador logado na conta do TikTok da marca, rode `npm run tiktok:demo -- --auto`. O script grava a tela sozinho (na primeira vez o macOS pede permissão de gravação de tela para o Terminal; conceda e rode de novo), abre o login do TikTok, recebe a autorização pelo `callback.html`, escolhe o primeiro rascunho, publica como "Somente eu", abre o perfil e salva o `.mov` em `data/demo/`.
+2. Sua única ação: clicar em **Autorizar** no navegador quando ele abrir.
+3. Modo manual, se preferir: `npm run tiktok:demo` (sem `--auto`) faz perguntas e você grava com Cmd+Shift+5.
+4. No portal de desenvolvedor do TikTok, no app de produção: suba o `.mov` como "demo video", confira os escopos `user.info.basic` e `video.publish`, e envie para revisão.
 5. Aprovado, troque `TIKTOK_CLIENT_KEY`/`TIKTOK_CLIENT_SECRET` pelas chaves de produção, refaça `npm run tiktok:login` e use `--privacy=PUBLIC_TO_EVERYONE`.
 
 ## Divulgação (TikTok / Pinterest)

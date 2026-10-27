@@ -13,3 +13,4 @@ data/tiktok-tokens.json
 data/tiktok-tokens-pending.json
 data/cartoon/
 data/seed/*.tmp
+data/demo/
