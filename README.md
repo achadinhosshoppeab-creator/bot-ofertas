@@ -40,6 +40,7 @@ npm run dry-run        # mostra as ofertas que seriam publicadas
 | `npm start` | Agendador; publica se `DRY_RUN=false` |
 | (automático) | `DRAFTS_CRON` (padrão 07:30) gera `DRAFTS_PER_RUN` rascunhos por dia e manda no Telegram do admin |
 | `npm run draft` | Gera, por oferta, 2 slides 1080x1920, legenda e um vídeo de ~15 s com narração (Edge TTS pt-BR por padrão, `TTS_ENGINE`; `pip install edge-tts` no `.venv`) em `data/drafts/`, e manda para `TELEGRAM_ADMIN_CHAT_ID`, para postar manualmente no TikTok/Instagram |
+| `npm run tiktok:demo` | Fluxo interativo completo (login → conta → vídeo → privacidade → interações → conteúdo comercial → consentimento → post com status) para gravar o vídeo de demonstração da revisão do TikTok |
 | `npm run tiktok:post -- --gap=20 --privacy=SELF_ONLY <pasta-rascunho>...` | Publica rascunhos no TikTok com intervalo entre eles (app não auditado só aceita SELF_ONLY/FOLLOWER_OF_CREATOR) |
 | `npm run logo` | Gera o logo da marca em `data/brand/` (foto de perfil para Telegram/TikTok/Pinterest, favicon do site) |
 | `npm test` | Testes (vitest) |
@@ -72,6 +73,14 @@ Segredos: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHANNEL_ID`, `TELEGRAM_ADMIN_CHAT_ID`,
 - A cada execução o bot grava `data/offers.json` com as melhores ofertas (`SITE_MAX_OFFERS`) e faz commit + push; o GitHub Pages publica sozinho. Isso acontece mesmo em `DRY_RUN=true` (desligue com `SITE_PUSH=false`).
 - A página também hospeda `privacidade.html` e `termos.html`, exigidos pelas auditorias do TikTok e do Pinterest.
 - É o destino do "link na bio".
+
+## Revisão do TikTok (para postar público pela API)
+
+1. No Mac, abra a gravação de tela (Cmd+Shift+5 → "Gravar a tela inteira") e comece a gravar.
+2. Rode `npm run tiktok:demo` e siga os passos: abra a URL de login no navegador (logado na conta da marca), autorize, cole a URL de retorno, escolha o vídeo, a privacidade, as interações e confirme. Deixe o terminal e o navegador visíveis.
+3. Abra o perfil no TikTok e mostre o vídeo publicado. Pare a gravação (1 a 3 minutos no total).
+4. No portal de desenvolvedor do TikTok, no app de produção: suba o vídeo como "demo video", confira os escopos `user.info.basic` e `video.publish`, e envie para revisão.
+5. Aprovado, troque `TIKTOK_CLIENT_KEY`/`TIKTOK_CLIENT_SECRET` pelas chaves de produção, refaça `npm run tiktok:login` e use `--privacy=PUBLIC_TO_EVERYONE`.
 
 ## Divulgação (TikTok / Pinterest)
 
