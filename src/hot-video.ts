@@ -87,12 +87,14 @@ try {
     const telegramUser = env.TELEGRAM_CHANNEL_ID.startsWith("@")
       ? env.TELEGRAM_CHANNEL_ID.slice(1)
       : undefined;
+    const category = categoryOf(offer.searchTerm, filtros.categories);
     const input = {
       offer,
       referencePrice: evaluation.referencePrice,
       discountPercent: evaluation.discountPercent,
       brand: env.BRAND_NAME,
       ...(telegramUser ? { telegram: telegramUser } : {}),
+      ...(category ? { category } : {}),
     };
 
     const dir = resolve("data", "drafts", "estoque", `${offer.productId}-3d`);
