@@ -64,9 +64,25 @@ async function mediaSeconds(path: string): Promise<number> {
 }
 
 /** Gera o áudio da narração (WAV no Kokoro, MP3 no Edge); retorna a duração em segundos. */
+const EDGE_FALLBACK_VOICE = "pt-BR-FranciscaNeural";
+
 export async function synthesize(text: string, outPath: string, tts: TtsOptions): Promise<number> {
   if (tts.engine === "edge") {
-    await run(tts.python, ["-m", "edge_tts", "--voice", tts.voice, `--rate=${tts.rate ?? "+8%"}`, "--text", text, "--write-media", outPath]);
+    const speak = (voice: string) =>
+      run(tts.python, ["-m", "edge_tts", "--voice", voice, `--rate=${tts.rate ?? "+8%"}`, "--text", text, "--write-media", outPath]);
+    try {
+      await speak(tts.voice);
+    } catch (error) {
+      // O serviço às vezes recusa uma voz (ex.: "No audio was received"); tenta de novo e cai para a voz padrão.
+      console.warn(`[tts] voz ${tts.voice} falhou (${String(error).split("\n")[0]}); tentando de novo...`);
+      try {
+        await speak(tts.voice);
+      } catch {
+        if (tts.voice === EDGE_FALLBACK_VOICE) throw error;
+        console.warn(`[tts] usando ${EDGE_FALLBACK_VOICE}`);
+        await speak(EDGE_FALLBACK_VOICE);
+      }
+    }
     return mediaSeconds(outPath);
   }
   const script = resolve("tools", "tts.py");

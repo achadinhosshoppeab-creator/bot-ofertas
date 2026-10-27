@@ -17,6 +17,7 @@
     "tiktok:login": "tsx src/tiktok-login.ts",
     "tiktok:test": "tsx src/tiktok-test.ts",
     "tiktok:demo": "tsx src/tiktok-demo.ts",
+    "hot": "tsx src/hot-video.ts",
     "tiktok:post": "tsx src/tiktok-post.ts",
     "logo": "tsx src/logo.ts",
     "test": "vitest run",
