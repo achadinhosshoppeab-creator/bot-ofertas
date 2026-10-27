@@ -34,12 +34,12 @@ async function main(): Promise<void> {
 
   try {
     const result = await runOnce({ db, source: createSource(), linker, filtros, dryRun: true, log: () => {} });
-    const pending = result.candidates.filter(
+    const pending = result.approved.filter(
       (c) => c.offer.imageUrl && !hasDraft(db, { productId: c.offer.productId, source: c.offer.source }),
     );
     // Para redes sociais, prioriza o que tende a dar view: muito vendido, desconto alto e preço "impulso".
     const chosen = [...pending].sort((a, b) => hotScore(b.offer, b.evaluation.discountPercent) - hotScore(a.offer, a.evaluation.discountPercent)).slice(0, env.DRAFTS_PER_RUN);
-    console.log(`[draft] ${result.candidates.length} aprovadas, ${pending.length} sem rascunho; gerando ${chosen.length}.`);
+    console.log(`[draft] ${result.approved.length} aprovadas, ${pending.length} sem rascunho; gerando ${chosen.length}.`);
 
     // Estoque: ainda não postado. `npm run tiktok:post` move para data/drafts/publicados/<data>/.
     for (const candidate of chosen) {

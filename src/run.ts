@@ -49,7 +49,10 @@ export type RunDeps = {
 export type RunResult = {
   fetched: number;
   rejected: Record<string, number>;
+  /** Aprovadas pelo filtro e ainda não publicadas no canal (fila do canal). */
   candidates: Candidate[];
+  /** Todas as aprovadas pelo filtro, publicadas ou não (site e rascunhos). */
+  approved: Candidate[];
   published: Array<Candidate & { messageId: string }>;
 };
 
@@ -65,6 +68,7 @@ export async function runOnce(deps: RunDeps): Promise<RunResult> {
 
   const rejected: Record<string, number> = {};
   const candidates: Candidate[] = [];
+  const approved: Candidate[] = [];
   const evaluateAll = db.transaction(() => {
     for (const offer of offers) {
       const history = getPriceHistoryLastDays(db, {
@@ -86,6 +90,7 @@ export async function runOnce(deps: RunDeps): Promise<RunResult> {
         rejected[key] = (rejected[key] ?? 0) + 1;
         continue;
       }
+      approved.push({ offer, evaluation });
       const previous = getPublished(db, { productId: offer.productId, source: offer.source });
       if (!canRepublish(offer.price, previous, filtros, now())) {
         rejected["já publicado recentemente"] = (rejected["já publicado recentemente"] ?? 0) + 1;
@@ -96,21 +101,24 @@ export async function runOnce(deps: RunDeps): Promise<RunResult> {
   });
   evaluateAll();
 
-  candidates.sort((a, b) => rankScore(b, filtros.commissionWeight) - rankScore(a, filtros.commissionWeight));
-  // O mesmo produto pode vir de lojas diferentes com ids diferentes: fica só o melhor ranqueado.
-  const seenTitles = new Set<string>();
-  const unique = candidates.filter(({ offer }) => {
-    const title = normalize(offer.title).replace(/\s+/g, " ").trim();
-    if (seenTitles.has(title)) {
-      return false;
-    }
-    seenTitles.add(title);
-    return true;
-  });
-  candidates.splice(0, candidates.length, ...unique);
-  log(`[run] ${candidates.length} ofertas aprovadas; rejeitadas: ${JSON.stringify(rejected)}`);
+  // Ordena por score e tira duplicatas de título (o mesmo produto vem de lojas diferentes com ids diferentes).
+  const rankAndDedupe = (list: Candidate[]): Candidate[] => {
+    const sorted = [...list].sort((a, b) => rankScore(b, filtros.commissionWeight) - rankScore(a, filtros.commissionWeight));
+    const seenTitles = new Set<string>();
+    return sorted.filter(({ offer }) => {
+      const title = normalize(offer.title).replace(/\s+/g, " ").trim();
+      if (seenTitles.has(title)) {
+        return false;
+      }
+      seenTitles.add(title);
+      return true;
+    });
+  };
+  candidates.splice(0, candidates.length, ...rankAndDedupe(candidates));
+  approved.splice(0, approved.length, ...rankAndDedupe(approved));
+  log(`[run] ${approved.length} ofertas aprovadas (${candidates.length} na fila do canal); rejeitadas: ${JSON.stringify(rejected)}`);
 
-  const result: RunResult = { fetched: offers.length, rejected, candidates, published: [] };
+  const result: RunResult = { fetched: offers.length, rejected, candidates, approved, published: [] };
 
   if (deps.dryRun) {
     for (const candidate of candidates.slice(0, 3)) {
@@ -199,6 +207,9 @@ export function createApp(config: AppConfig) {
   /** Fila de candidatos da última coleta; o publishTick consome daqui. */
   let pool: Candidate[] = [];
   let intervalMinutes = nextIntervalMinutes(filtros);
+  /** Fila curta: espaça os posts para a fila durar até o cooldown liberar ofertas de novo. */
+  const SCARCE_POOL = 60;
+  const pace = () => (pool.length < SCARCE_POOL ? { ...filtros, minIntervalMinutesBetweenPosts: 10, maxIntervalMinutesBetweenPosts: 20 } : filtros);
   /** Posts já feitos no canal hoje (lido do banco: sobrevive a reinícios do processo). */
   const postsToday = (now: Date) => countPublishedSince(db, startOfDayBrt(now));
 
@@ -234,10 +245,11 @@ export function createApp(config: AppConfig) {
         publishEnabled: false,
       });
       pool = result.candidates;
+      intervalMinutes = nextIntervalMinutes(pace());
       let site = "desligado";
       if (env.SITE_DIR) {
         try {
-          const outcome = await publishSite(resolve(env.SITE_DIR), result.candidates, {
+          const outcome = await publishSite(resolve(env.SITE_DIR), result.approved, {
             maxOffers: env.SITE_MAX_OFFERS,
             push: env.SITE_PUSH,
             categories: filtros.categories,
@@ -249,11 +261,11 @@ export function createApp(config: AppConfig) {
           await alerter.alert(`Falha ao publicar o site: ${String(error)}`);
         }
       }
-      const fresh = markOffersSeen(db, result.candidates.map((c) => c.offer));
+      const fresh = markOffersSeen(db, result.approved.map((c) => c.offer));
       await report(
         [
           `✅ Rotina ok ${new Date().toLocaleTimeString("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" })}`,
-          `${result.fetched} produtos · ${result.candidates.length} aprovadas · ${fresh} novas`,
+          `${result.fetched} produtos · ${result.approved.length} aprovadas · ${fresh} novas`,
           `site: ${site}`,
           env.DRY_RUN
             ? "canal: desligado (DRY_RUN)"
@@ -290,7 +302,7 @@ export function createApp(config: AppConfig) {
     const [candidate] = pool.splice(index, 1) as [Candidate];
     try {
       const messageId = await publishCandidate({ db, linker, publisher }, candidate);
-      intervalMinutes = nextIntervalMinutes(filtros);
+      intervalMinutes = nextIntervalMinutes(pace());
       console.log(`[canal] publicado: ${candidate.offer.title.slice(0, 60)} (msg ${messageId}); próximo em ~${intervalMinutes} min`);
     } catch (error) {
       await alerter.alert(`Falha ao publicar no canal: ${String(error)}`);

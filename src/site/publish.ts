@@ -116,6 +116,10 @@ export async function publishSite(
   );
   const path = join(siteDir, "data", "offers.json");
   mkdirSync(join(siteDir, "data"), { recursive: true });
+  if (data.offers.length === 0 && existsSync(path)) {
+    log("[site] nenhuma oferta aprovada nesta rodada; mantendo o site como está.");
+    return { count: 0, changed: false };
+  }
 
   // Só reescreve quando a lista mudou (GitHub Pages tem limite de ~10 builds por hora).
   if (existsSync(path)) {
