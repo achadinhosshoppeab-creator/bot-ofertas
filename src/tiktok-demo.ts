@@ -30,6 +30,14 @@ function startRecording(): void {
   recordingPath = resolve("data", "demo", `tiktok-demo-${new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-")}.mov`);
   // -V: duração máxima em segundos; o processo é encerrado antes com SIGINT, que finaliza o arquivo.
   recorder = spawn("screencapture", ["-V", "600", "-x", recordingPath], { stdio: "ignore" });
+  recorder.once("exit", (code) => {
+    if (code !== 0 && code !== null) {
+      console.warn(
+        "⚠️  A gravação de tela não iniciou. Libere o Terminal em Ajustes do Sistema → Privacidade e Segurança → Gravação de Tela e rode de novo.",
+      );
+      recorder = undefined;
+    }
+  });
   console.log(`🎥 Gravando a tela em ${recordingPath}`);
 }
 
