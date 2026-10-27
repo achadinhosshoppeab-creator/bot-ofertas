@@ -21,6 +21,8 @@ const opt = (name: string, fallback: string) => args.find((a) => a.startsWith(`-
 const maxPrice = Number(opt("max-price", "80"));
 const wantedId = opt("id", "");
 const VOICES = ["pt-BR-FranciscaNeural", "pt-BR-ThalitaMultilingualNeural"];
+/** Produtos que as redes costumam travar (imagem de corpo/roupa íntima); fora da seleção automática. */
+const UNSAFE = /sutiã|sutia|calcinha|lingerie|cueca|sexy|bikini|biquíni|biquini|modelador|cinta|body\b/i;
 
 const config = loadConfig();
 const { env, filtros } = config;
@@ -32,7 +34,7 @@ const python = env.TTS_PYTHON.includes("/") ? resolve(env.TTS_PYTHON) : env.TTS_
 try {
   const result = await runOnce({ db, source: createSource(), linker, filtros, dryRun: true, log: () => {} });
   const ranked = result.approved
-    .filter((c) => c.offer.imageUrl && (wantedId ? c.offer.productId === wantedId : c.offer.price <= maxPrice && !hasDraft(db, { productId: c.offer.productId, source: c.offer.source })))
+    .filter((c) => c.offer.imageUrl && (wantedId ? c.offer.productId === wantedId : c.offer.price <= maxPrice && !UNSAFE.test(c.offer.title) && !hasDraft(db, { productId: c.offer.productId, source: c.offer.source })))
     .sort((a, b) => hotScore(b.offer, b.evaluation.discountPercent) - hotScore(a.offer, a.evaluation.discountPercent));
   const candidate = ranked[0];
   if (!candidate) {
