@@ -18,7 +18,8 @@ describe("legendas", () => {
     expect(caption).toContain("De R$ 116,58 por R$ 27,98 (76% off)");
     expect(caption).toMatch(/bio/i);
     expect(caption).not.toContain("afiliado");
-    expect(caption).toContain("#achadinhos");
+    expect(caption).not.toContain("#achadinhos");
+    expect(caption.split("\n").at(-1)?.split(" ").length).toBeLessThanOrEqual(5);
     expect(caption).toContain("#garrafa");
   });
 

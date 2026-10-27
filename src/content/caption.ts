@@ -9,6 +9,8 @@ export type CaptionInput = {
   referencePrice: number;
   discountPercent: number;
   brand: string;
+  /** Categoria do site (ex.: "Moda"); vira hashtags da área. */
+  category?: string;
   /** Hashtags extras por nicho (sem #). */
   tags?: string[];
   /** Username do canal do Telegram (sem @) para citar na legenda. */
@@ -31,7 +33,28 @@ const CTAS = [
   "EU QUERO nos comentários que eu mando no privado 📩",
 ];
 
-const BASE_TAGS = ["achadinhos", "achadinhosshopee", "shopee", "promocao", "oferta", "desconto"];
+/** Tags por categoria do site (config/filtros.json → categories). */
+const CATEGORY_TAGS: Record<string, string[]> = {
+  "Casa e organização": ["organizacao", "casaarrumada", "decoracao"],
+  Cozinha: ["cozinha", "utensilios", "cozinhacriativa"],
+  Eletrônicos: ["tech", "gadgets", "tecnologia"],
+  Beleza: ["beleza", "skincare", "maquiagem"],
+  Moda: ["modafeminina", "lookdodia", "moda"],
+  "Pet e bebê": ["pet", "maternidade", "bebe"],
+  Ferramentas: ["ferramentas", "faztudo", "diy"],
+  "Presentes e papelaria": ["papelaria", "presentes", "fofura"],
+};
+/** Completa até 5 quando faltar tag específica. */
+const FILLER_TAGS = ["dicadecompra", "comprinhas", "baratinho", "valeapena", "descontao", "precobaixo"];
+const MAX_TAGS = 5;
+/** Palavras de título que não descrevem o produto. */
+const STOP_WORDS = new Set([
+  "premium", "promocao", "oferta", "kit", "unidades", "unidade", "original", "feminino", "feminina", "masculino", "masculina",
+  "adulto", "infantil", "com", "para", "sem", "cor", "cores", "tamanho", "novo", "nova", "alta", "alto", "baixa", "baixo",
+  "espessura", "elevador", "frontal", "fechamento", "qualidade", "super", "extra", "grande", "pequeno", "medio", "plus",
+  "pro", "max", "mini", "top", "lancamento", "envio", "imediato", "pronta", "entrega", "atacado", "varejo", "promo",
+  "pecas", "peca", "conjunto", "modelo", "estilo", "tipo", "total", "frete", "gratis", "barato", "melhor", "oferta",
+]);
 
 /** Escolha estável por produto, para variar entre posts sem sortear a cada execução. */
 export function pick<T>(items: readonly T[], seed: string, salt = ""): T {
@@ -39,15 +62,27 @@ export function pick<T>(items: readonly T[], seed: string, salt = ""): T {
   return items[(hash[0] as number) % items.length] as T;
 }
 
-export function hashtags(input: Pick<CaptionInput, "offer" | "tags">): string[] {
-  const words = input.offer.title
+const slug = (text: string) =>
+  text
     .normalize("NFD")
     .replace(/\p{Diacritic}/gu, "")
     .toLowerCase()
-    .split(/[^a-z0-9]+/)
-    .filter((word) => word.length >= 5 && word.length <= 14)
+    .replace(/[^a-z0-9 ]+/g, " ");
+
+/**
+ * No máximo 5 hashtags, do específico para o geral: até 3 palavras do nome do produto
+ * (ex.: calca, pantalona, alfaiataria), depois a categoria (moda, lookdodia) e, se faltar, uma de nicho.
+ */
+export function hashtags(input: Pick<CaptionInput, "offer" | "tags" | "category">): string[] {
+  const words = slug(input.offer.title)
+    .split(/\s+/)
+    .filter((word) => word.length >= 4 && word.length <= 14 && !/\d/.test(word) && !STOP_WORDS.has(word))
     .slice(0, 3);
-  return [...new Set([...BASE_TAGS, ...(input.tags ?? []), ...words])].map((tag) => `#${tag}`);
+  const category = input.category ? (CATEGORY_TAGS[input.category] ?? []) : [];
+  const term = input.offer.searchTerm ? [slug(input.offer.searchTerm).replace(/\s+/g, "")] : [];
+  const filler = pick(FILLER_TAGS, input.offer.productId, "tag");
+  const all = [...new Set([...words, ...category.slice(0, 2), ...term, ...(input.tags ?? []), filler])];
+  return all.slice(0, MAX_TAGS).map((tag) => `#${tag}`);
 }
 
 /** Legenda para TikTok/Instagram (link não clicável, chama para a bio). */

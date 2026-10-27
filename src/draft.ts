@@ -5,17 +5,18 @@
  */
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { buildCarousel } from "./content/carousel.js";
+import { buildCarousel, fetchImage } from "./content/carousel.js";
 import { pick, socialCaption } from "./content/caption.js";
 
 /** Vozes aprovadas; intercaladas por produto. */
 const VOICES = ["pt-BR-FranciscaNeural", "pt-BR-ThalitaMultilingualNeural"];
-import { buildVideo, type TtsOptions } from "./content/video.js";
+import type { TtsOptions } from "./content/video.js";
+import { buildVideo3d } from "./content/video3d.js";
 import { loadConfig } from "./config.js";
 import { hasDraft, insertDraft, openDatabase, closeDatabase } from "./db.js";
 import { TelegramClient } from "./publishers/telegram.js";
 import { createSourceAndLinker, runOnce, type Candidate } from "./run.js";
-import { hotScore } from "./site/publish.js";
+import { categoryOf, hotScore } from "./site/publish.js";
 
 async function main(): Promise<void> {
   const config = loadConfig();
@@ -44,7 +45,7 @@ async function main(): Promise<void> {
     // Estoque: ainda não postado. `npm run tiktok:post` move para data/drafts/publicados/<data>/.
     for (const candidate of chosen) {
       const dir = resolve("data", "drafts", "estoque", candidate.offer.productId);
-      await draft(candidate, dir, env.BRAND_NAME, env.TELEGRAM_CHANNEL_ID, telegram, env.TELEGRAM_ADMIN_CHAT_ID, ttsFor(candidate.offer.productId));
+      await draft(candidate, dir, env.BRAND_NAME, env.TELEGRAM_CHANNEL_ID, categoryOf(candidate.offer.searchTerm, filtros.categories), telegram, env.TELEGRAM_ADMIN_CHAT_ID, ttsFor(candidate.offer.productId));
       insertDraft(db, { productId: candidate.offer.productId, source: candidate.offer.source, price: candidate.offer.price });
       console.log(`[draft] ${candidate.offer.title.slice(0, 60)} → ${dir}`);
     }
@@ -61,6 +62,7 @@ async function draft(
   dir: string,
   brand: string,
   channelId: string,
+  category: string | undefined,
   telegram: TelegramClient | undefined,
   adminChatId: string,
   tts: TtsOptions | undefined,
@@ -71,6 +73,7 @@ async function draft(
     discountPercent: candidate.evaluation.discountPercent,
     brand,
     ...(channelId.startsWith("@") ? { telegram: channelId.slice(1) } : {}),
+    ...(category ? { category } : {}),
   };
   const slides = await buildCarousel(input);
   const caption = socialCaption(input);
@@ -82,7 +85,8 @@ async function draft(
   const videoPath = resolve(dir, "video.mp4");
   let video: Buffer | undefined;
   try {
-    await buildVideo(input, [slides[0] as Buffer, slides[1] as Buffer], videoPath, tts);
+    const image = await fetchImage(candidate.offer.imageUrl as string);
+    await buildVideo3d({ ...input, referencePrice: candidate.evaluation.referencePrice }, image, videoPath, tts);
     video = readFileSync(videoPath);
   } catch (error) {
     console.warn(`[draft] vídeo falhou (segue só com as imagens): ${String(error)}`);

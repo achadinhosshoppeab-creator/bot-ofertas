@@ -37,7 +37,7 @@ export function hotScore(offer: { salesCount?: number; price: number }, discount
 
 export type CategoryMap = Record<string, string[]>;
 
-function categoryOf(
+export function categoryOf(
   term: string | undefined,
   categories: CategoryMap,
 ): string | undefined {
