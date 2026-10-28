@@ -4,7 +4,13 @@
  *
  *   npm run hot -- [--count=3] [--max-price=80] [--voice=pt-BR-FranciscaNeural] [--id=<itemId>]
  */
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { resolve } from "node:path";
 import { pick, socialCaption } from "./content/caption.js";
 import { fetchImage } from "./content/carousel.js";
@@ -22,6 +28,55 @@ const opt = (name: string, fallback: string) =>
 const maxPrice = Number(opt("max-price", "80"));
 const wantedId = opt("id", "");
 const count = wantedId ? 1 : Math.max(1, Number(opt("count", "1")));
+/** Palavras para pular (ex.: --skip=calca,pantalona) além das que já viraram vídeo recentemente. */
+const skipWords = opt("skip", "")
+  .split(",")
+  .map((w) => w.trim().toLowerCase())
+  .filter(Boolean);
+
+const slug = (t: string) =>
+  t
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase();
+/** Primeira palavra "de produto" do título (calca, sandalia, squishy...). */
+function productWord(title: string): string {
+  return (
+    slug(title)
+      .split(/[^a-z]+/)
+      .find(
+        (w) => w.length >= 4 && !["kit", "promocao", "conjunto"].includes(w),
+      ) ?? ""
+  );
+}
+/** Produtos que já viraram vídeo (estoque + publicados): evita mandar o mesmo tipo de novo. */
+function recentProductWords(): Set<string> {
+  const words = new Set<string>();
+  for (const base of ["estoque", "publicados"]) {
+    const root = resolve("data", "drafts", base);
+    if (!existsSync(root)) continue;
+    for (const entry of readdirSync(root, { withFileTypes: true })) {
+      const dirs = entry.isDirectory() ? [resolve(root, entry.name)] : [];
+      for (const d of dirs) {
+        const sub = readdirSync(d, { withFileTypes: true })
+          .filter((e) => e.isDirectory())
+          .map((e) => resolve(d, e.name));
+        for (const leaf of [d, ...sub]) {
+          const legenda = resolve(leaf, "legenda.txt");
+          if (!existsSync(legenda)) continue;
+          const first = readFileSync(legenda, "utf8").split("\n")[0] ?? "";
+          const title = first.replace(
+            /^.*?[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}]\u{FE0F}?\s*/u,
+            "",
+          );
+          const w = productWord(title);
+          if (w) words.add(w);
+        }
+      }
+    }
+  }
+  return words;
+}
 const VOICES = ["pt-BR-FranciscaNeural", "pt-BR-ThalitaMultilingualNeural"];
 /** Produtos que as redes costumam travar (imagem de corpo/roupa íntima); fora da seleção automática. */
 const UNSAFE =
@@ -48,7 +103,9 @@ try {
     dryRun: true,
     log: () => {},
   });
+  const avoid = new Set([...recentProductWords(), ...skipWords]);
   const ranked = result.approved
+    .filter((c) => wantedId || !avoid.has(productWord(c.offer.title)))
     .filter(
       (c) =>
         c.offer.imageUrl &&
