@@ -14,7 +14,7 @@ import {
 import { resolve } from "node:path";
 import { pick, socialCaption } from "./content/caption.js";
 import { fetchImage } from "./content/carousel.js";
-import { buildVideo3d } from "./content/video3d.js";
+import { buildVideo3d, type VideoStyle } from "./content/video3d.js";
 import type { TtsOptions } from "./content/video.js";
 import { loadConfig } from "./config.js";
 import { closeDatabase, hasDraft, insertDraft, openDatabase } from "./db.js";
@@ -27,6 +27,7 @@ const opt = (name: string, fallback: string) =>
   args.find((a) => a.startsWith(`--${name}=`))?.split("=")[1] ?? fallback;
 const maxPrice = Number(opt("max-price", "80"));
 const wantedId = opt("id", "");
+const style = opt("style", "classic") as VideoStyle;
 const count = wantedId ? 1 : Math.max(1, Number(opt("count", "1")));
 /** Palavras para pular (ex.: --skip=calca,pantalona) além das que já viraram vídeo recentemente. */
 const skipWords = opt("skip", "")
@@ -152,9 +153,15 @@ try {
       brand: env.BRAND_NAME,
       ...(telegramUser ? { telegram: telegramUser } : {}),
       ...(category ? { category } : {}),
+      style,
     };
 
-    const dir = resolve("data", "drafts", "estoque", `${offer.productId}-3d`);
+    const dir = resolve(
+      "data",
+      "drafts",
+      "estoque",
+      `${offer.productId}-${style === "neon" ? "neon" : "3d"}`,
+    );
     mkdirSync(dir, { recursive: true });
     const image = await fetchImage(offer.imageUrl as string);
     const videoPath = resolve(dir, "video.mp4");

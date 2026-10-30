@@ -18,10 +18,14 @@ const FPS = 30;
 const FONT = "Arial, Helvetica, sans-serif";
 const brl = new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+export type VideoStyle = "classic" | "neon";
+
 export type Video3dInput = VideoInput & {
   referencePrice: number;
   /** Username do canal (sem @), mostrado na chamada final. */
   telegram?: string;
+  /** Visual: "classic" (cartão laranja) ou "neon" (gancho, flip, etiqueta balançando, barra de preço caindo, confete). */
+  style?: VideoStyle;
 };
 
 // ---------- utilidades de animação ----------
@@ -62,7 +66,7 @@ type Scene = {
   ctaAt: number;
 };
 
-function renderFrame(scene: Scene, t: number): string {
+function renderFrameClassic(scene: Scene, t: number): string {
   const { input, total, ctaAt } = scene;
   const cx = W / 2;
 
@@ -198,6 +202,153 @@ function renderFrame(scene: Scene, t: number): string {
   ${channel && cta > 0 ? text(channel, cx, 1895, 42, "#ffd2c2", 700, `opacity="${cta.toFixed(3)}"`) : ""}
   ${t > total - 0.4 ? `<rect width="100%" height="100%" fill="#000" opacity="${span(t, total - 0.4, total).toFixed(3)}"/>` : ""}
 </svg>`;
+}
+
+
+// ============================ estilo NEON ============================
+function renderFrameNeon(scene: Scene, t: number): string {
+  const { input, total, ctaAt } = scene;
+  const cx = W / 2;
+
+  // gancho inicial "PARA TUDO!" (0–1.3 s): estoura, treme e some
+  const hookIn = easeOutBack(span(t, 0, 0.35));
+  const hookOut = 1 - span(t, 0.95, 1.2);
+  const hookScale = hookIn * (0.6 + 0.4 * hookOut);
+  const hookRot = Math.sin(t * 40) * 2.5 * (t < 0.95 ? 1 : 0);
+  const hookOpacity = t < 1.2 ? hookOut : 0;
+
+  // cartão de vidro: flip no eixo X (deitado → em pé), depois flutua com giro leve em Y
+  const flip = easeOutBack(span(t, 1.2, 2.0));
+  const angleX = (1 - flip) * 85;
+  const sy = Math.max(0.02, Math.cos((angleX * Math.PI) / 180));
+  const wob = t > 2.0 ? 1 : 0;
+  const angleY = wob * 6 * Math.sin((t - 2.0) * 1.6);
+  const sx = Math.cos((angleY * Math.PI) / 180);
+  const skew = Math.sin((angleY * Math.PI) / 180) * 4;
+  const floatY = wob * 12 * Math.sin((t - 2.0) * 2.1);
+  const cardW = 760;
+  const cardH = 760;
+  const cardX = cx - cardW / 2;
+  const cardY = 330 + floatY;
+  const cardCY = cardY + cardH / 2;
+  const cardT = `translate(${cx} ${cardCY}) scale(${sx.toFixed(4)} ${sy.toFixed(4)}) skewY(${skew.toFixed(3)}) translate(${-cx} ${-cardCY})`;
+  const ringPulse = 1 + 0.05 * Math.sin(t * 3);
+
+  // etiqueta pendurada balançando (amortecida)
+  const tagIn = easeOutBack(span(t, 2.2, 2.7));
+  const swing = tagIn * 22 * Math.sin((t - 2.2) * 4.2) * Math.exp(-(Math.max(0, t - 2.2)) * 0.55) + tagIn * 4 * Math.sin((t - 2.2) * 2.4);
+  const tagX = cardX + cardW - 40;
+  const tagY = cardY - 20;
+
+  // título
+  const titleIn = easeOutCubic(span(t, 2.0, 2.5));
+  const titleLines = wrapLines(shortTitle(input.offer.title, 60), 22, 2);
+
+  // barra de preço caindo + contagem + confete
+  const barIn = easeOutCubic(span(t, 2.6, 3.1));
+  const drop = easeOutCubic(span(t, 3.1, 4.2));
+  const shown = input.referencePrice + (input.offer.price - input.referencePrice) * drop;
+  const done = t >= 4.2;
+  const hit = done ? 1 + 0.12 * Math.exp(-(t - 4.2) * 4) * Math.cos((t - 4.2) * 30) : 1;
+  const barX = 120;
+  const barW = W - 240;
+  const barY = 1440;
+  const confetti: string[] = [];
+  if (done && t < 4.2 + 2.6) {
+    const age = t - 4.2;
+    for (let i = 0; i < 60; i++) {
+      const a = rand(i) * Math.PI * 2;
+      const v = 380 + rand(i + 50) * 620;
+      const x = cx + Math.cos(a) * v * age * 0.9;
+      const y = 1520 + Math.sin(a) * v * age * 0.6 + 700 * age * age;
+      const rot = rand(i + 150) * 360 + age * 500 * (rand(i + 250) - 0.5);
+      const colors = ["#ffe14d", "#39f0ff", "#ff4dd2", "#7cff6b", "#ffffff"];
+      const color = colors[i % colors.length];
+      const op = clamp01(1 - age / 2.4);
+      confetti.push(`<rect x="-9" y="-5" width="18" height="10" fill="${color}" opacity="${op.toFixed(2)}" transform="translate(${x.toFixed(1)} ${y.toFixed(1)}) rotate(${rot.toFixed(1)})"/>`);
+    }
+  }
+
+  // chamada final digitada
+  const ctaIn = easeOutBack(span(t, ctaAt, ctaAt + 0.5));
+  const ctaText = "Comenta EU QUERO";
+  const typed = ctaText.slice(0, Math.round(ctaText.length * span(t, ctaAt + 0.2, ctaAt + 1.1)));
+  const cursor = t < ctaAt + 1.3 && Math.floor(t * 4) % 2 === 0 ? "|" : "";
+  const channel = input.telegram ? `t.me/${input.telegram}` : "";
+
+  // feixes de luz no fundo
+  const beam1 = -200 + ((t * 90) % (W + 600));
+  const beam2 = W + 200 - ((t * 60) % (W + 600));
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+  <defs>
+    <linearGradient id="nbg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0a0f2e"/><stop offset="0.5" stop-color="#2a0a4e"/><stop offset="1" stop-color="#071f33"/>
+    </linearGradient>
+    <linearGradient id="beam" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#39f0ff" stop-opacity="0"/><stop offset="0.5" stop-color="#39f0ff" stop-opacity="0.16"/><stop offset="1" stop-color="#39f0ff" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="beam2" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#ff4dd2" stop-opacity="0"/><stop offset="0.5" stop-color="#ff4dd2" stop-opacity="0.14"/><stop offset="1" stop-color="#ff4dd2" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="ring"><stop offset="0.55" stop-color="#39f0ff" stop-opacity="0"/><stop offset="0.8" stop-color="#39f0ff" stop-opacity="0.55"/><stop offset="1" stop-color="#ff4dd2" stop-opacity="0"/></radialGradient>
+    <linearGradient id="glass" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity="0.22"/><stop offset="1" stop-color="#ffffff" stop-opacity="0.06"/></linearGradient>
+    <linearGradient id="tag" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffe14d"/><stop offset="1" stop-color="#ffb800"/></linearGradient>
+    <linearGradient id="bar" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#ff4dd2"/><stop offset="1" stop-color="#39f0ff"/></linearGradient>
+    <linearGradient id="ncta" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#39f0ff"/><stop offset="1" stop-color="#ff4dd2"/></linearGradient>
+    <clipPath id="imgClip"><rect x="${cardX + 30}" y="${cardY + 30}" width="${cardW - 60}" height="${cardH - 60}" rx="40"/></clipPath>
+  </defs>
+
+  <rect width="100%" height="100%" fill="url(#nbg)"/>
+  <rect x="${beam1.toFixed(1)}" y="-400" width="420" height="${H + 800}" fill="url(#beam)" transform="rotate(18 ${cx} ${H / 2})"/>
+  <rect x="${beam2.toFixed(1)}" y="-400" width="360" height="${H + 800}" fill="url(#beam2)" transform="rotate(-14 ${cx} ${H / 2})"/>
+  ${Array.from({ length: 48 }, (_, i) => `<circle cx="${(i % 8) * 140 + 70}" cy="${Math.floor(i / 8) * 320 + 160}" r="2" fill="#ffffff" opacity="${(0.08 + 0.08 * Math.sin(t * 2 + i)).toFixed(3)}"/>`).join("")}
+
+  ${text(input.brand.toUpperCase(), cx, 140, 42, "#9fe9ff", 800, 'letter-spacing="10"')}
+
+  <circle cx="${cx}" cy="${cardCY.toFixed(1)}" r="${(520 * ringPulse * flip).toFixed(1)}" fill="url(#ring)"/>
+  <g transform="${cardT}">
+    <rect x="${cardX}" y="${cardY}" width="${cardW}" height="${cardH}" rx="52" fill="url(#glass)" stroke="#ffffff" stroke-opacity="0.55" stroke-width="3"/>
+    <rect x="${cardX + 30}" y="${cardY + 30}" width="${cardW - 60}" height="${cardH - 60}" rx="40" fill="#ffffff"/>
+    <image href="${scene.imageDataUri}" x="${cardX + 30}" y="${cardY + 30}" width="${cardW - 60}" height="${cardH - 60}" preserveAspectRatio="xMidYMid meet" clip-path="url(#imgClip)"/>
+  </g>
+
+  <g transform="translate(${tagX} ${tagY}) rotate(${swing.toFixed(2)}) scale(${tagIn.toFixed(3)})">
+    <line x1="0" y1="-60" x2="0" y2="0" stroke="#ffffff" stroke-width="4" stroke-opacity="0.7"/>
+    <path d="M-70 0 L70 0 L95 40 L70 190 Q70 210 50 210 L-50 210 Q-70 210 -70 190 L-95 40 Z" fill="url(#tag)" stroke="#fff6c2" stroke-width="5"/>
+    <circle cx="0" cy="40" r="12" fill="#2a0a4e"/>
+    ${text(`-${Math.round(input.discountPercent)}%`, 0, 150, 64, "#2a0a4e", 900)}
+  </g>
+
+  <g opacity="${titleIn.toFixed(3)}" transform="translate(${((titleIn - 1) * 140).toFixed(1)} 0)">
+    <rect x="100" y="1180" width="10" height="${titleLines.length * 72 + 10}" rx="5" fill="#39f0ff"/>
+    ${titleLines.map((line, i) => `<text x="140" y="${1236 + i * 72}" font-family="${FONT}" font-size="58" font-weight="800" fill="#ffffff">${esc(line)}</text>`).join("")}
+  </g>
+
+  <g opacity="${barIn.toFixed(3)}">
+    ${text(`era R$ ${brl.format(input.referencePrice)}`, barX + 8, barY - 24, 40, "#c9b6ff", 600, 'text-anchor="start"')}
+    <rect x="${barX}" y="${barY}" width="${barW}" height="26" rx="13" fill="#ffffff" fill-opacity="0.12"/>
+    <rect x="${barX}" y="${barY}" width="${(barW * (1 - 0.82 * drop)).toFixed(1)}" height="26" rx="13" fill="url(#bar)"/>
+    <circle cx="${(barX + barW * (1 - 0.82 * drop)).toFixed(1)}" cy="${barY + 13}" r="${(22 * hit).toFixed(1)}" fill="#ffffff"/>
+  </g>
+  <g transform="translate(${cx} 1610) scale(${(barIn * hit).toFixed(4)})">
+    ${text(input.offer.hasVariantPrices ? "a partir de" : "agora", -250, -20, 40, "#9fe9ff", 700, 'text-anchor="end"')}
+    ${text(`R$ ${brl.format(shown)}`, 60, 20, 128, done ? "#ffe14d" : "#ffffff", 900)}
+  </g>
+  ${confetti.join("")}
+
+  <g transform="translate(${cx} ${(1765 + (1 - ctaIn) * 300).toFixed(1)}) scale(${ctaIn.toFixed(3)})">
+    <rect x="-430" y="-68" width="860" height="136" rx="68" fill="#0a0f2e" stroke="url(#ncta)" stroke-width="8"/>
+    ${text(`${typed}${cursor}`, 0, 24, 66, "#ffffff", 900)}
+  </g>
+  ${channel && ctaIn > 0 ? text(channel, cx, 1890, 38, "#9fe9ff", 700, `opacity="${ctaIn.toFixed(3)}"`) : ""}
+  ${hookOpacity > 0 ? `<g transform="translate(${cx} 960) rotate(${hookRot.toFixed(2)}) scale(${hookScale.toFixed(3)})" opacity="${hookOpacity.toFixed(3)}"><rect x="-470" y="-150" width="940" height="300" rx="40" fill="#0a0f2e" opacity="0.75"/>${text("PARA TUDO!", 0, 44, 132, "#ffe14d", 900)}</g>` : ""}
+  ${t > total - 0.4 ? `<rect width="100%" height="100%" fill="#000" opacity="${span(t, total - 0.4, total).toFixed(3)}"/>` : ""}
+</svg>`;
+}
+
+function renderFrame(scene: Scene, t: number): string {
+  return scene.input.style === "neon" ? renderFrameNeon(scene, t) : renderFrameClassic(scene, t);
 }
 
 /** Renderiza o vídeo 3D com narração. Retorna a duração em segundos. */
