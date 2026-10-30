@@ -78,7 +78,10 @@ export function hashtags(input: Pick<CaptionInput, "offer" | "tags" | "category"
     .split(/\s+/)
     .filter((word) => word.length >= 4 && word.length <= 14 && !/\d/.test(word) && !STOP_WORDS.has(word))
     .slice(0, 3);
-  const category = input.category ? (CATEGORY_TAGS[input.category] ?? []) : [];
+  let category = input.category ? (CATEGORY_TAGS[input.category] ?? []) : [];
+  if (input.category === "Moda" && /masculin/i.test(input.offer.title)) {
+    category = ["modamasculina", "lookdodia", "moda"];
+  }
   const term = input.offer.searchTerm ? [slug(input.offer.searchTerm).replace(/\s+/g, "")] : [];
   const filler = pick(FILLER_TAGS, input.offer.productId, "tag");
   const all = [...new Set([...words, ...category.slice(0, 2), ...term, ...(input.tags ?? []), filler])];
