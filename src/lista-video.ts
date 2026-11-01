@@ -27,13 +27,21 @@ const opt = (name: string, fallback: string) =>
   args.find((a) => a.startsWith(`--${name}=`))?.split("=")[1] ?? fallback;
 const count = Math.max(3, Math.min(8, Number(opt("count", "5"))));
 const maxPrice = Number(opt("max-price", "30"));
+/** Qualidade mínima para entrar na lista: desconto e vendas de verdade. */
+const minDiscount = Number(opt("min-discount", "30"));
+const minSales = Number(opt("min-sales", "1000"));
+/** --dry: só lista os candidatos (sem vídeo), para calibrar os filtros. */
+const DRY = args.includes("--dry");
 const skipWords = opt("skip", "")
   .split(",")
   .map((w) => w.trim().toLowerCase())
   .filter(Boolean);
-const VOICES = ["pt-BR-FranciscaNeural", "pt-BR-ThalitaMultilingualNeural"];
+const VOICES = ["pt-BR-FranciscaNeural", "pt-BR-AntonioNeural"];
 const UNSAFE =
   /sutiã|sutia|calcinha|lingerie|cueca|sexy|bikini|biquíni|biquini|modelador|cinta|body\b/i;
+/** Produto "commodity" que não segura atenção em vídeo (embalagem, insumo). */
+const BORING =
+  /\bsaco|sacola|saquinho|embalagem|fita isolante|fita crepe|lixo\b|papel toalha|guardanapo|fralda|absorvente|cavalo/i;
 
 const slug = (t: string) =>
   t
@@ -53,8 +61,8 @@ function recentProductWords(): Set<string> {
   for (const base of ["estoque", "publicados"]) {
     const root = resolve("data", "drafts", base);
     if (!existsSync(root)) continue;
-    for (const entry of readdirSync(root, { withFileTypes: true }).filter((e) =>
-      e.isDirectory(),
+    for (const entry of readdirSync(root, { withFileTypes: true }).filter(
+      (e) => e.isDirectory() && e.name.startsWith("lista-"),
     )) {
       const d = resolve(root, entry.name);
       const leaves = [
@@ -112,7 +120,10 @@ try {
       (c) =>
         c.offer.imageUrl &&
         c.offer.price <= maxPrice &&
+        c.evaluation.discountPercent >= minDiscount &&
+        (c.offer.salesCount ?? 0) >= minSales &&
         !UNSAFE.test(c.offer.title) &&
+        !BORING.test(c.offer.title) &&
         !avoid.has(productWord(c.offer.title)),
     )
     .sort(
@@ -121,6 +132,30 @@ try {
         hotScore(a.offer, a.evaluation.discountPercent),
     );
 
+  if (DRY) {
+    const pool = result.approved
+      .filter(
+        (c) =>
+          c.offer.imageUrl &&
+          c.offer.price <= maxPrice &&
+          !UNSAFE.test(c.offer.title) &&
+          !BORING.test(c.offer.title) &&
+          !avoid.has(productWord(c.offer.title)),
+      )
+      .sort(
+        (a, b) =>
+          hotScore(b.offer, b.evaluation.discountPercent) -
+          hotScore(a.offer, a.evaluation.discountPercent),
+      );
+    for (const c of pool.slice(0, 25))
+      console.log(
+        `${c.offer.price.toFixed(2).padStart(6)} | -${Math.round(c.evaluation.discountPercent)}% | ${String(c.offer.salesCount ?? 0).padStart(5)} v | ${categoryOf(c.offer.searchTerm, filtros.categories) ?? "-"} | ${c.offer.title.slice(0, 55)}`,
+      );
+    console.log(
+      `(${pool.length} candidatos até R$ ${maxPrice}; evitando: ${[...avoid].join(", ")})`,
+    );
+    process.exit(0);
+  }
   // Variedade: um tipo de produto por item e no máximo 2 por categoria.
   const usedWords = new Set<string>();
   const usedCats = new Map<string, number>();
@@ -128,7 +163,7 @@ try {
   for (const c of ranked) {
     const w = productWord(c.offer.title);
     const cat = categoryOf(c.offer.searchTerm, filtros.categories) ?? "outros";
-    if (usedWords.has(w) || (usedCats.get(cat) ?? 0) >= 2) continue;
+    if (usedWords.has(w) || (usedCats.get(cat) ?? 0) >= 3) continue;
     usedWords.add(w);
     usedCats.set(cat, (usedCats.get(cat) ?? 0) + 1);
     chosen.push(c);
@@ -155,7 +190,7 @@ try {
     env.TTS_VOICE === "auto" ? pick(VOICES, seed, "voice") : env.TTS_VOICE;
   const tts: TtsOptions | undefined =
     env.TTS_ENGINE === "edge"
-      ? { engine: "edge", python, voice, rate: "+15%" }
+      ? { engine: "edge", python, voice, rate: "+18%" }
       : undefined;
   const telegramUser = env.TELEGRAM_CHANNEL_ID.startsWith("@")
     ? env.TELEGRAM_CHANNEL_ID.slice(1)

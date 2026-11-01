@@ -19,7 +19,7 @@ export type VideoInput = {
 
 export type TtsOptions =
   | {
-      /** Vozes neurais da Microsoft via `edge-tts` (pt-BR-FranciscaNeural, pt-BR-AntonioNeural, pt-BR-ThalitaMultilingualNeural). */
+      /** Vozes neurais da Microsoft via `edge-tts` (pt-BR-FranciscaNeural, pt-BR-AntonioNeural). A Thalita "Multilingual" lê palavras em inglês com sotaque inglês: não usar. */
       engine: "edge";
       python: string;
       voice: string;

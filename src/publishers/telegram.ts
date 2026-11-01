@@ -16,19 +16,28 @@ export class TelegramClient {
   ) {}
 
   async call(method: string, body: Record<string, unknown>): Promise<number> {
-    const response = await this.fetchImpl(`https://api.telegram.org/bot${this.token}/${method}`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(body),
-    });
+    const response = await this.fetchImpl(
+      `https://api.telegram.org/bot${this.token}/${method}`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      },
+    );
     const data = responseSchema.parse(await response.json());
     if (!data.ok || !data.result) {
-      throw new Error(`Telegram ${method} falhou: ${data.description ?? response.status}`);
+      throw new Error(
+        `Telegram ${method} falhou: ${data.description ?? response.status}`,
+      );
     }
     return data.result.message_id;
   }
 
-  sendMessage(chatId: string, text: string, replyMarkup?: ReplyMarkup): Promise<number> {
+  sendMessage(
+    chatId: string,
+    text: string,
+    replyMarkup?: ReplyMarkup,
+  ): Promise<number> {
     return this.call("sendMessage", {
       chat_id: chatId,
       text,
@@ -38,22 +47,59 @@ export class TelegramClient {
     });
   }
 
+  /** Envia um arquivo como documento (o Telegram não recomprime; o vídeo chega na resolução original). */
+  async sendDocument(
+    chatId: string,
+    file: Buffer,
+    filename: string,
+    caption: string,
+  ): Promise<number> {
+    const form = new FormData();
+    form.set("chat_id", chatId);
+    form.set("caption", caption.slice(0, 1024));
+    form.set("document", new Blob([file], { type: "video/mp4" }), filename);
+    const response = await this.fetchImpl(
+      `https://api.telegram.org/bot${this.token}/sendDocument`,
+      { method: "POST", body: form },
+    );
+    const data = responseSchema.parse(await response.json());
+    if (!data.ok || !data.result) {
+      throw new Error(
+        `Telegram sendDocument falhou: ${data.description ?? response.status}`,
+      );
+    }
+    return data.result.message_id;
+  }
+
   /** Envia um vídeo (arquivo local) com legenda. */
-  async sendVideo(chatId: string, video: Buffer, caption: string): Promise<number> {
+  async sendVideo(
+    chatId: string,
+    video: Buffer,
+    caption: string,
+  ): Promise<number> {
     const form = new FormData();
     form.set("chat_id", chatId);
     form.set("caption", caption);
     form.set("video", new Blob([video], { type: "video/mp4" }), "video.mp4");
-    const response = await this.fetchImpl(`https://api.telegram.org/bot${this.token}/sendVideo`, { method: "POST", body: form });
+    const response = await this.fetchImpl(
+      `https://api.telegram.org/bot${this.token}/sendVideo`,
+      { method: "POST", body: form },
+    );
     const data = responseSchema.parse(await response.json());
     if (!data.ok || !data.result) {
-      throw new Error(`Telegram sendVideo falhou: ${data.description ?? response.status}`);
+      throw new Error(
+        `Telegram sendVideo falhou: ${data.description ?? response.status}`,
+      );
     }
     return data.result.message_id;
   }
 
   /** Envia várias imagens (arquivos locais) como álbum; a legenda vai na primeira. */
-  async sendMediaGroup(chatId: string, images: Buffer[], caption: string): Promise<number> {
+  async sendMediaGroup(
+    chatId: string,
+    images: Buffer[],
+    caption: string,
+  ): Promise<number> {
     const form = new FormData();
     form.set("chat_id", chatId);
     form.set(
@@ -66,22 +112,42 @@ export class TelegramClient {
         })),
       ),
     );
-    images.forEach((image, index) => form.set(`img${index}`, new Blob([image], { type: "image/jpeg" }), `slide${index + 1}.jpg`));
+    images.forEach((image, index) =>
+      form.set(
+        `img${index}`,
+        new Blob([image], { type: "image/jpeg" }),
+        `slide${index + 1}.jpg`,
+      ),
+    );
 
-    const response = await this.fetchImpl(`https://api.telegram.org/bot${this.token}/sendMediaGroup`, {
-      method: "POST",
-      body: form,
-    });
+    const response = await this.fetchImpl(
+      `https://api.telegram.org/bot${this.token}/sendMediaGroup`,
+      {
+        method: "POST",
+        body: form,
+      },
+    );
     const data = z
-      .object({ ok: z.boolean(), description: z.string().optional(), result: z.array(z.object({ message_id: z.number() })).optional() })
+      .object({
+        ok: z.boolean(),
+        description: z.string().optional(),
+        result: z.array(z.object({ message_id: z.number() })).optional(),
+      })
       .parse(await response.json());
     if (!data.ok || !data.result?.[0]) {
-      throw new Error(`Telegram sendMediaGroup falhou: ${data.description ?? response.status}`);
+      throw new Error(
+        `Telegram sendMediaGroup falhou: ${data.description ?? response.status}`,
+      );
     }
     return data.result[0].message_id;
   }
 
-  sendPhoto(chatId: string, photo: string, caption: string, replyMarkup?: ReplyMarkup): Promise<number> {
+  sendPhoto(
+    chatId: string,
+    photo: string,
+    caption: string,
+    replyMarkup?: ReplyMarkup,
+  ): Promise<number> {
     return this.call("sendPhoto", {
       chat_id: chatId,
       photo,
@@ -107,13 +173,24 @@ export class TelegramPublisher implements Publisher {
     const markup = this.buttons(input);
     if (input.imageUrl) {
       try {
-        return String(await this.client.sendPhoto(this.channelId, input.imageUrl, input.text, markup));
+        return String(
+          await this.client.sendPhoto(
+            this.channelId,
+            input.imageUrl,
+            input.text,
+            markup,
+          ),
+        );
       } catch (error) {
         // Imagem inválida/inacessível não deve impedir o post.
-        console.warn(`[telegram] sendPhoto falhou, enviando só texto: ${String(error)}`);
+        console.warn(
+          `[telegram] sendPhoto falhou, enviando só texto: ${String(error)}`,
+        );
       }
     }
-    return String(await this.client.sendMessage(this.channelId, input.text, markup));
+    return String(
+      await this.client.sendMessage(this.channelId, input.text, markup),
+    );
   }
 
   /** Botões: abrir a oferta e indicar o canal (só para canais públicos, com @username). */
@@ -144,9 +221,14 @@ export class TelegramAlerter {
       return;
     }
     try {
-      await this.client.sendMessage(this.adminChatId, `⚠️ bot-ofertas\n\n${escapeHtml(message.slice(0, 3500))}`);
+      await this.client.sendMessage(
+        this.adminChatId,
+        `⚠️ bot-ofertas\n\n${escapeHtml(message.slice(0, 3500))}`,
+      );
     } catch (error) {
-      console.error(`[alerta] não consegui avisar no Telegram: ${String(error)}`);
+      console.error(
+        `[alerta] não consegui avisar no Telegram: ${String(error)}`,
+      );
     }
   }
 }

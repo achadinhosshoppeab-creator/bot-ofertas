@@ -109,14 +109,20 @@ export function listaScripts(input: ListaInput): {
 } {
   const n = input.items.length;
   return {
-    hook: `${numberSpoken[n - 1] ?? n} achadinhos abaixo de ${input.maxPrice} reais. Olha só.`,
+    hook: `${numberSpoken[n - 1] ?? n} achadinhos abaixo de ${input.maxPrice} reais. Olha só!`,
     items: input.items.map((item, i) => {
       const reais = Math.floor(item.offer.price);
       const centavos = Math.round((item.offer.price - reais) * 100);
       const price = centavos > 0 ? `${reais} e ${centavos}` : `${reais} reais`;
-      return `${numberSpoken[i] ?? i + 1}: ${shortSpoken(item.offer.title) || spokenTitle(item.offer.title)}, ${price}.`;
+      const name =
+        shortSpoken(item.offer.title) || spokenTitle(item.offer.title);
+      const openers = ["Número", "O", "E o"];
+      const opener = openers[i % openers.length];
+      return opener === "Número"
+        ? `Número ${numberSpoken[i] ?? i + 1}: ${name}, por ${price}.`
+        : `${opener} ${numberSpoken[i] ?? i + 1}, ${name}, por ${price}.`;
     }),
-    end: "Comenta o número que você quer, que eu te mando o link. E salva!",
+    end: "Comenta o número que você quer, que eu te mando o link. E salva o vídeo!",
   };
 }
 
@@ -157,6 +163,13 @@ function hookFrame(input: ListaInput, t: number, dur: number): string {
 </svg>`;
 }
 
+/** Fundo do segmento anterior (para a transição de círculo que abre). */
+function previousBackground(index: number): string {
+  if (index <= 0) return `<rect width="100%" height="100%" fill="#120a1f"/>`;
+  const [p1, p2] = PALETTES[(index - 1) % PALETTES.length] as [string, string];
+  return `<defs><linearGradient id="gp" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${p1}"/><stop offset="1" stop-color="${p2}"/></linearGradient></defs><rect width="100%" height="100%" fill="url(#gp)"/><rect width="100%" height="100%" fill="#000" opacity="0.18"/>`;
+}
+
 function itemFrame(
   input: ListaInput,
   index: number,
@@ -164,6 +177,7 @@ function itemFrame(
   t: number,
   dur: number,
 ): string {
+  const wipe = easeOutCubic(span(t, 0, 0.32));
   const item = input.items[index] as ListaItem;
   const n = input.items.length;
   const [c1, c2] = PALETTES[index % PALETTES.length] as [string, string];
@@ -192,8 +206,13 @@ function itemFrame(
     <linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${c1}"/><stop offset="1" stop-color="${c2}"/></linearGradient>
     <clipPath id="ic"><rect x="${imgX}" y="${imgY}" width="${imgSize}" height="${imgSize}" rx="48"/></clipPath>
   </defs>
-  <rect width="100%" height="100%" fill="url(#g)"/>
-  <rect width="100%" height="100%" fill="#000" opacity="${(0.18 + 0.12 * (1 - exit)).toFixed(3)}"/>
+  ${previousBackground(index)}
+  <clipPath id="wipe"><circle cx="${W / 2}" cy="${H / 2}" r="${(wipe * 1250).toFixed(1)}"/></clipPath>
+  <g clip-path="url(#wipe)">
+    <rect width="100%" height="100%" fill="url(#g)"/>
+    <rect width="100%" height="100%" fill="#000" opacity="${(0.18 + 0.12 * (1 - exit)).toFixed(3)}"/>
+  </g>
+  ${wipe < 1 ? `<circle cx="${W / 2}" cy="${H / 2}" r="${(wipe * 1250).toFixed(1)}" fill="none" stroke="#ffffff" stroke-width="14" opacity="${(1 - wipe).toFixed(2)}"/>` : ""}
   ${segs}
   ${text(input.brand.toUpperCase(), W / 2, 150, 38, "#ffffff", 800, 'letter-spacing="10" opacity="0.85"')}
 
@@ -233,6 +252,7 @@ function itemFrame(
 }
 
 function endFrame(input: ListaInput, t: number): string {
+  const wipe = easeOutCubic(span(t, 0, 0.32));
   const pop = easeOutBack(span(t, 0, 0.5));
   const pop2 = easeOutBack(span(t, 0.4, 0.9));
   const pop3 = easeOutCubic(span(t, 0.9, 1.3));
@@ -245,7 +265,9 @@ function endFrame(input: ListaInput, t: number): string {
     )
     .join("");
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
-  <rect width="100%" height="100%" fill="#120a1f"/>
+  ${previousBackground(input.items.length)}
+  <clipPath id="wipeEnd"><circle cx="${W / 2}" cy="${H / 2}" r="${(wipe * 1250).toFixed(1)}"/></clipPath>
+  <g clip-path="url(#wipeEnd)"><rect width="100%" height="100%" fill="#120a1f"/></g>
   <circle cx="${W / 2}" cy="900" r="${(700 * pop).toFixed(0)}" fill="#ff3cac" opacity="0.25"/>
   ${text(input.brand.toUpperCase(), W / 2, 150, 42, "#ffffff", 800, 'letter-spacing="10" opacity="0.8"')}
   <g transform="translate(${W / 2} 760) scale(${(pop * pulse).toFixed(4)})">

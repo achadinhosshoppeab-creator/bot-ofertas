@@ -78,7 +78,7 @@ function recentProductWords(): Set<string> {
   }
   return words;
 }
-const VOICES = ["pt-BR-FranciscaNeural", "pt-BR-ThalitaMultilingualNeural"];
+const VOICES = ["pt-BR-FranciscaNeural", "pt-BR-AntonioNeural"];
 /** Produtos que as redes costumam travar (imagem de corpo/roupa íntima); fora da seleção automática. */
 const UNSAFE =
   /sutiã|sutia|calcinha|lingerie|cueca|sexy|bikini|biquíni|biquini|modelador|cinta|body\b/i;
@@ -180,9 +180,10 @@ try {
     console.log(`[hot] vídeo de ${seconds}s em ${videoPath}`);
 
     if (telegram) {
-      await telegram.sendVideo(
+      await telegram.sendDocument(
         env.TELEGRAM_ADMIN_CHAT_ID,
         readFileSync(videoPath),
+        `${offer.productId}.mp4`,
         `🔥 Oferta quente: ${offer.title.slice(0, 80)}`,
       );
       await telegram.sendMessage(env.TELEGRAM_ADMIN_CHAT_ID, caption);
