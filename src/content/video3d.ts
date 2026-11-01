@@ -14,9 +14,9 @@ import { SLIDE_HEIGHT as H, SLIDE_WIDTH as W, wrapLines } from "./carousel.js";
 import { spokenTitle, synthesize, type TtsOptions, type VideoInput } from "./video.js";
 
 const run = promisify(execFile);
-const FPS = 30;
-const FONT = "Arial, Helvetica, sans-serif";
-const brl = new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+export const FPS = 30;
+export const FONT = "Arial, Helvetica, sans-serif";
+export const brl = new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export type VideoStyle = "classic" | "neon";
 
@@ -29,23 +29,23 @@ export type Video3dInput = VideoInput & {
 };
 
 // ---------- utilidades de animação ----------
-const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
+export const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
 /** Progresso 0..1 entre `from` e `to` segundos. */
-const span = (t: number, from: number, to: number) => clamp01((t - from) / (to - from));
-const easeOutCubic = (x: number) => 1 - Math.pow(1 - x, 3);
-const easeOutBack = (x: number) => {
+export const span = (t: number, from: number, to: number) => clamp01((t - from) / (to - from));
+export const easeOutCubic = (x: number) => 1 - Math.pow(1 - x, 3);
+export const easeOutBack = (x: number) => {
   const c1 = 1.70158;
   const c3 = c1 + 1;
   return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2);
 };
-const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+export const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 /** Pseudo-aleatório determinístico (as faíscas ficam iguais a cada render). */
-const rand = (seed: number) => {
+export const rand = (seed: number) => {
   const x = Math.sin(seed * 12.9898 + 78.233) * 43758.5453;
   return x - Math.floor(x);
 };
 
-function text(content: string, x: number, y: number, size: number, fill: string, weight = 700, extra = ""): string {
+export function text(content: string, x: number, y: number, size: number, fill: string, weight = 700, extra = ""): string {
   const anchor = extra.includes("text-anchor=") ? "" : 'text-anchor="middle"';
   return `<text x="${x}" y="${y}" font-family="${FONT}" font-size="${size}" font-weight="${weight}" fill="${fill}" ${anchor} ${extra}>${esc(content)}</text>`;
 }
